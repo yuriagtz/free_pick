@@ -3,7 +3,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
-import { getAuthUrl, getTokensFromCode, getCalendarEvents, calculateAvailableSlots, formatSlotsAsText, refreshAccessToken } from "./googleCalendar";
+import { getAuthUrl, getTokensFromCode, getCalendarEvents, getCalendarList, calculateAvailableSlots, formatSlotsAsText } from "./googleCalendar";
 import { upsertGoogleToken, getGoogleTokenByUserId, deleteGoogleTokenByUserId } from "./db";
 
 export const appRouter = router({
@@ -55,14 +55,33 @@ export const appRouter = router({
       return { success: true };
     }),
 
-    getAvailableSlots: protectedProcedure
+      getCalendarList: protectedProcedure.query(async ({ ctx }) => {
+        const token = await getGoogleTokenByUserId(ctx.user.id);
+        if (!token) {
+          throw new Error('Google Calendar not connected');
+        }
+
+        const accessToken = token.accessToken;
+        const expiryDate = token.expiryDate.getTime();
+
+        const calendars = await getCalendarList(
+          accessToken,
+          token.refreshToken,
+          expiryDate
+        );
+
+        return { calendars };
+      }),
+
+      getAvailableSlots: protectedProcedure
       .input(
         z.object({
           startDate: z.string(),
           endDate: z.string(),
-          workingHoursStart: z.number().min(0).max(23).default(9),
-          workingHoursEnd: z.number().min(0).max(23).default(18),
-          slotDurationMinutes: z.number().min(15).max(240).default(30),
+          workingHoursStart: z.number().min(0).max(23),
+          workingHoursEnd: z.number().min(0).max(23),
+          slotDurationMinutes: z.number().min(15).max(240),
+          calendarIds: z.array(z.string()).optional(),
         })
       )
       .query(async ({ ctx, input }) => {
@@ -103,12 +122,12 @@ export const appRouter = router({
             token.refreshToken,
             expiryDate,
             startDate,
-            endDate
+            endDate,
+            input.calendarIds || ['primary']
           );
-          console.log('Retrieved events:', events.length);
         } catch (error: any) {
           console.error('Error fetching calendar events:', error);
-          apiError = error.message || 'Unknown error';
+          throw error;
         }
 
         const availableSlots = calculateAvailableSlots(
@@ -126,15 +145,6 @@ export const appRouter = router({
           slots: availableSlots,
           formattedText,
           totalSlots: availableSlots.length,
-          debug: {
-            eventCount: events.length,
-            events: events.map(e => ({
-              summary: e.summary,
-              start: e.start,
-              end: e.end,
-            })),
-            apiError,
-          },
         };
       }),
   }),

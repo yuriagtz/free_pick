@@ -1,63 +1,16 @@
-import { google, Auth } from 'googleapis';
+import { google } from 'googleapis';
 import { ENV } from './_core/env';
 
-const SCOPES = [
-  'https://www.googleapis.com/auth/calendar.readonly',
-  'https://www.googleapis.com/auth/calendar.events.readonly'
-];
+const oauth2Client = new google.auth.OAuth2(
+  ENV.googleClientId,
+  ENV.googleClientSecret,
+  `${ENV.baseUrl}/api/google/callback`
+);
 
 /**
- * Get the redirect URI based on the current environment
+ * Create a Google Calendar client with the given credentials
  */
-function getRedirectUri(): string {
-  // In production or when BASE_URL is set, use the full URL
-  if (process.env.BASE_URL) {
-    return `${process.env.BASE_URL}/api/google/callback`;
-  }
-  
-  // Default to localhost for development
-  return 'http://localhost:3000/api/google/callback';
-}
-
-/**
- * Create OAuth2 client for Google Calendar API
- */
-export function createOAuth2Client(): Auth.OAuth2Client {
-  const redirectUri = getRedirectUri();
-  
-  return new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    redirectUri
-  );
-}
-
-/**
- * Generate authorization URL for Google Calendar OAuth
- */
-export function getAuthUrl(): string {
-  const oauth2Client = createOAuth2Client();
-  return oauth2Client.generateAuthUrl({
-    access_type: 'offline',
-    scope: SCOPES,
-    prompt: 'consent', // Force consent screen to get refresh token
-  });
-}
-
-/**
- * Exchange authorization code for tokens
- */
-export async function getTokensFromCode(code: string) {
-  const oauth2Client = createOAuth2Client();
-  const { tokens } = await oauth2Client.getToken(code);
-  return tokens;
-}
-
-/**
- * Create authenticated calendar client
- */
-export function createCalendarClient(accessToken: string, refreshToken: string, expiryDate: number) {
-  const oauth2Client = createOAuth2Client();
+function createCalendarClient(accessToken: string, refreshToken: string, expiryDate: number) {
   oauth2Client.setCredentials({
     access_token: accessToken,
     refresh_token: refreshToken,
@@ -68,16 +21,47 @@ export function createCalendarClient(accessToken: string, refreshToken: string, 
 }
 
 /**
- * Refresh access token if expired
+ * Get the authorization URL for Google Calendar
  */
-export async function refreshAccessToken(refreshToken: string) {
-  const oauth2Client = createOAuth2Client();
-  oauth2Client.setCredentials({
-    refresh_token: refreshToken,
-  });
+export function getAuthUrl() {
+  const scopes = [
+    'https://www.googleapis.com/auth/calendar.readonly',
+    'https://www.googleapis.com/auth/calendar.events.readonly',
+  ];
 
-  const { credentials } = await oauth2Client.refreshAccessToken();
-  return credentials;
+  return oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: scopes,
+    prompt: 'consent',
+  });
+}
+
+/**
+ * Exchange authorization code for tokens
+ */
+export async function getTokensFromCode(code: string) {
+  const { tokens } = await oauth2Client.getToken(code);
+  return tokens;
+}
+
+/**
+ * Get list of user's calendars
+ */
+export async function getCalendarList(
+  accessToken: string,
+  refreshToken: string,
+  expiryDate: number
+) {
+  const calendar = createCalendarClient(accessToken, refreshToken, expiryDate);
+
+  const response = await calendar.calendarList.list();
+  
+  return (response.data.items || []).map(cal => ({
+    id: cal.id!,
+    summary: cal.summary || cal.id!,
+    primary: cal.primary || false,
+    backgroundColor: cal.backgroundColor,
+  }));
 }
 
 /**
@@ -88,7 +72,8 @@ export async function getCalendarEvents(
   refreshToken: string,
   expiryDate: number,
   timeMin: Date,
-  timeMax: Date
+  timeMax: Date,
+  calendarIds: string[] = ['primary']
 ) {
   const calendar = createCalendarClient(accessToken, refreshToken, expiryDate);
 
@@ -99,56 +84,83 @@ export async function getCalendarEvents(
   const timeMaxUTC = new Date(timeMax);
   timeMaxUTC.setUTCHours(23, 59, 59, 999);
 
-  const response = await calendar.events.list({
-    calendarId: 'primary',
-    timeMin: timeMinUTC.toISOString(),
-    timeMax: timeMaxUTC.toISOString(),
-    singleEvents: true,
-    orderBy: 'startTime',
-  });
+  // Fetch events from all selected calendars
+  const allEvents = [];
+  for (const calendarId of calendarIds) {
+    try {
+      const response = await calendar.events.list({
+        calendarId,
+        timeMin: timeMinUTC.toISOString(),
+        timeMax: timeMaxUTC.toISOString(),
+        singleEvents: true,
+        orderBy: 'startTime',
+      });
+      allEvents.push(...(response.data.items || []));
+    } catch (error) {
+      console.error(`Error fetching events from calendar ${calendarId}:`, error);
+    }
+  }
 
-  return response.data.items || [];
+  return allEvents;
 }
 
 /**
  * Calculate available time slots from calendar events
+ * All times are handled in JST (Asia/Tokyo) timezone
  */
 export function calculateAvailableSlots(
   events: any[],
   startDate: Date,
   endDate: Date,
-  workingHoursStart: number = 9, // 9 AM
-  workingHoursEnd: number = 18, // 6 PM
+  workingHoursStart: number = 9, // 9 AM JST
+  workingHoursEnd: number = 18, // 6 PM JST
   slotDurationMinutes: number = 30
 ): Array<{ start: Date; end: Date }> {
   const availableSlots: Array<{ start: Date; end: Date }> = [];
+  const JST_OFFSET = 9 * 60; // JST is UTC+9
+
+  // Helper function to create JST date
+  function createJSTDate(year: number, month: number, day: number, hour: number, minute: number = 0): Date {
+    // Create date in UTC, then adjust for JST offset
+    const date = new Date(Date.UTC(year, month, day, hour - 9, minute, 0, 0));
+    return date;
+  }
+
+  // Helper function to parse event date/time to JST
+  function parseEventTime(dateTimeStr: string | undefined, dateStr: string | undefined): Date | null {
+    if (dateTimeStr) {
+      // Parse ISO string with timezone (e.g., "2025-10-30T14:00:00+09:00")
+      return new Date(dateTimeStr);
+    } else if (dateStr) {
+      // All-day event (e.g., "2025-11-07")
+      const [year, month, day] = dateStr.split('-').map(Number);
+      return createJSTDate(year, month - 1, day, 0, 0);
+    }
+    return null;
+  }
 
   // Iterate through each day in the range
   const currentDate = new Date(startDate);
-  currentDate.setHours(0, 0, 0, 0);
-  
   const endDateTime = new Date(endDate);
-  endDateTime.setHours(23, 59, 59, 999);
 
   while (currentDate <= endDateTime) {
-    // Skip weekends (0 = Sunday, 6 = Saturday)
-    if (currentDate.getDay() !== 0 && currentDate.getDay() !== 6) {
-      const dayStart = new Date(currentDate);
-      dayStart.setHours(workingHoursStart, 0, 0, 0);
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const day = currentDate.getDate();
+    const dayOfWeek = currentDate.getDay();
 
-      const dayEnd = new Date(currentDate);
-      dayEnd.setHours(workingHoursEnd, 0, 0, 0);
+    // Skip weekends (0 = Sunday, 6 = Saturday)
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      // Create working hours in JST
+      const dayStart = createJSTDate(year, month, day, workingHoursStart);
+      const dayEnd = createJSTDate(year, month, day, workingHoursEnd);
 
       // Get events for this day
       const dayEvents = events.filter(event => {
-        // Handle both dateTime and date formats
-        const eventStartStr = event.start?.dateTime || event.start?.date;
-        const eventEndStr = event.end?.dateTime || event.end?.date;
+        const eventStart = parseEventTime(event.start?.dateTime, event.start?.date);
+        const eventEnd = parseEventTime(event.end?.dateTime, event.end?.date);
         
-        if (!eventStartStr || !eventEndStr) return false;
-
-        const eventStart = new Date(eventStartStr);
-        const eventEnd = new Date(eventEndStr);
+        if (!eventStart || !eventEnd) return false;
 
         // Check if event overlaps with this day's working hours
         return eventStart < dayEnd && eventEnd > dayStart;
@@ -156,10 +168,9 @@ export function calculateAvailableSlots(
 
       // Sort events by start time
       dayEvents.sort((a, b) => {
-        const aStartStr = a.start?.dateTime || a.start?.date;
-        const bStartStr = b.start?.dateTime || b.start?.date;
-        const aStart = new Date(aStartStr!);
-        const bStart = new Date(bStartStr!);
+        const aStart = parseEventTime(a.start?.dateTime, a.start?.date);
+        const bStart = parseEventTime(b.start?.dateTime, b.start?.date);
+        if (!aStart || !bStart) return 0;
         return aStart.getTime() - bStart.getTime();
       });
 
@@ -167,11 +178,10 @@ export function calculateAvailableSlots(
       let currentSlotStart = new Date(dayStart);
 
       for (const event of dayEvents) {
-        const eventStartStr = event.start?.dateTime || event.start?.date;
-        const eventEndStr = event.end?.dateTime || event.end?.date;
+        const eventStart = parseEventTime(event.start?.dateTime, event.start?.date);
+        const eventEnd = parseEventTime(event.end?.dateTime, event.end?.date);
         
-        const eventStart = new Date(eventStartStr!);
-        const eventEnd = new Date(eventEndStr!);
+        if (!eventStart || !eventEnd) continue;
 
         // Adjust event times to be within working hours
         const adjustedEventStart = eventStart < dayStart ? dayStart : eventStart;
@@ -211,53 +221,59 @@ export function calculateAvailableSlots(
 
     // Move to next day
     currentDate.setDate(currentDate.getDate() + 1);
-    currentDate.setHours(0, 0, 0, 0);
   }
 
   return availableSlots;
 }
 
 /**
- * Format available slots as copyable text
+ * Format available slots as human-readable text grouped by date
  */
 export function formatSlotsAsText(slots: Array<{ start: Date; end: Date }>): string {
   if (slots.length === 0) {
-    return '指定期間内に空き時間はありません。';
+    return '指定期間に空き時間が見つかりませんでした。';
   }
 
-  const groupedByDate: { [key: string]: Array<{ start: Date; end: Date }> } = {};
+  // Group slots by date
+  const slotsByDate = new Map<string, Array<{ start: Date; end: Date }>>();
 
-  slots.forEach(slot => {
+  for (const slot of slots) {
+    // Format date in JST
     const dateKey = slot.start.toLocaleDateString('ja-JP', {
+      timeZone: 'Asia/Tokyo',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       weekday: 'short',
     });
 
-    if (!groupedByDate[dateKey]) {
-      groupedByDate[dateKey] = [];
+    if (!slotsByDate.has(dateKey)) {
+      slotsByDate.set(dateKey, []);
     }
-    groupedByDate[dateKey].push(slot);
-  });
+    slotsByDate.get(dateKey)!.push(slot);
+  }
 
-  let text = '【空き時間一覧】\n\n';
-
-  Object.keys(groupedByDate).forEach(dateKey => {
-    text += `■ ${dateKey}\n`;
-    groupedByDate[dateKey].forEach(slot => {
+  // Format output
+  let output = '';
+  for (const [dateKey, dateSlots] of slotsByDate) {
+    output += `■ ${dateKey}\n`;
+    for (const slot of dateSlots) {
       const startTime = slot.start.toLocaleTimeString('ja-JP', {
+        timeZone: 'Asia/Tokyo',
         hour: '2-digit',
         minute: '2-digit',
+        hour12: false,
       });
       const endTime = slot.end.toLocaleTimeString('ja-JP', {
+        timeZone: 'Asia/Tokyo',
         hour: '2-digit',
         minute: '2-digit',
+        hour12: false,
       });
-      text += `  ${startTime} - ${endTime}\n`;
-    });
-    text += '\n';
-  });
+      output += `  ${startTime} - ${endTime}\n`;
+    }
+    output += '\n';
+  }
 
-  return text;
+  return output.trim();
 }

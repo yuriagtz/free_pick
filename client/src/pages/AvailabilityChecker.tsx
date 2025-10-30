@@ -1,6 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,6 +18,7 @@ export default function AvailabilityChecker() {
   const [workingHoursStart, setWorkingHoursStart] = useState(9);
   const [workingHoursEnd, setWorkingHoursEnd] = useState(18);
   const [slotDuration, setSlotDuration] = useState(30);
+  const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>(['primary']);
 
   const { data: connectionStatus, isLoading: statusLoading, refetch: refetchStatus } = 
     trpc.calendar.getConnectionStatus.useQuery(undefined, {
@@ -26,6 +28,11 @@ export default function AvailabilityChecker() {
   const { data: authUrl } = trpc.calendar.getAuthUrl.useQuery(undefined, {
     enabled: isAuthenticated && !connectionStatus?.connected,
   });
+
+  const { data: calendarListData, isLoading: calendarsLoading } = 
+    trpc.calendar.getCalendarList.useQuery(undefined, {
+      enabled: isAuthenticated && connectionStatus?.connected,
+    });
 
   const disconnectMutation = trpc.calendar.disconnect.useMutation({
     onSuccess: () => {
@@ -45,6 +52,7 @@ export default function AvailabilityChecker() {
         workingHoursStart,
         workingHoursEnd,
         slotDurationMinutes: slotDuration,
+        calendarIds: selectedCalendarIds,
       },
       {
         enabled: false,
@@ -86,6 +94,11 @@ export default function AvailabilityChecker() {
       return;
     }
 
+    if (selectedCalendarIds.length === 0) {
+      toast.error("少なくとも1つのカレンダーを選択してください");
+      return;
+    }
+
     refetchSlots();
   };
 
@@ -99,6 +112,14 @@ export default function AvailabilityChecker() {
   const handleDisconnect = () => {
     if (confirm("Googleカレンダーの連携を解除しますか?")) {
       disconnectMutation.mutate();
+    }
+  };
+
+  const handleCalendarToggle = (calendarId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedCalendarIds([...selectedCalendarIds, calendarId]);
+    } else {
+      setSelectedCalendarIds(selectedCalendarIds.filter(id => id !== calendarId));
     }
   };
 
@@ -190,6 +211,49 @@ export default function AvailabilityChecker() {
                 </div>
               </CardHeader>
             </Card>
+
+            {calendarsLoading ? (
+              <Card>
+                <CardContent className="py-8 flex justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                </CardContent>
+              </Card>
+            ) : calendarListData && calendarListData.calendars.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>カレンダー選択</CardTitle>
+                  <CardDescription>
+                    空き時間を確認するカレンダーを選択してください
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {calendarListData.calendars.map((calendar) => (
+                    <div key={calendar.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={calendar.id}
+                        checked={selectedCalendarIds.includes(calendar.id)}
+                        onCheckedChange={(checked) => handleCalendarToggle(calendar.id, checked as boolean)}
+                      />
+                      <label
+                        htmlFor={calendar.id}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex items-center gap-2"
+                      >
+                        {calendar.backgroundColor && (
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: calendar.backgroundColor }}
+                          />
+                        )}
+                        {calendar.summary}
+                        {calendar.primary && (
+                          <span className="text-xs text-muted-foreground">(プライマリ)</span>
+                        )}
+                      </label>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardHeader>
@@ -285,11 +349,6 @@ export default function AvailabilityChecker() {
                       <CardTitle>空き時間一覧</CardTitle>
                       <CardDescription>
                         {availabilityData.totalSlots}件の空き枠が見つかりました
-                        {availabilityData.debug && (
-                          <span className="ml-2 text-xs text-muted-foreground">
-                            (取得イベント数: {availabilityData.debug.eventCount}件)
-                          </span>
-                        )}
                       </CardDescription>
                     </div>
                     <Button
@@ -303,25 +362,6 @@ export default function AvailabilityChecker() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {availabilityData.debug && availabilityData.debug.apiError && (
-                    <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
-                      <h3 className="font-semibold mb-2 text-red-700">エラー: APIリクエスト失敗</h3>
-                      <p className="text-sm text-red-600">{availabilityData.debug.apiError}</p>
-                    </div>
-                  )}
-                  {availabilityData.debug && availabilityData.debug.eventCount > 0 && (
-                    <div className="mb-4 p-4 bg-muted rounded-md">
-                      <h3 className="font-semibold mb-2">デバッグ: 取得したイベント</h3>
-                      <pre className="text-xs overflow-auto max-h-40">
-                        {JSON.stringify(availabilityData.debug.events, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-                  {availabilityData.debug && availabilityData.debug.eventCount === 0 && !availabilityData.debug.apiError && (
-                    <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-                      <p className="text-sm text-yellow-700">警告: Googleカレンダーからイベントが取得できませんでした。指定期間に予定があるか確認してください。</p>
-                    </div>
-                  )}
                   <Textarea
                     value={availabilityData.formattedText}
                     readOnly
