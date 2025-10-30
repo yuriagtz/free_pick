@@ -102,6 +102,13 @@ export const appRouter = router({
           endDate
         );
 
+        // Debug: Log events
+        console.log('Retrieved events:', JSON.stringify(events.map(e => ({
+          summary: e.summary,
+          start: e.start,
+          end: e.end
+        })), null, 2));
+
         const availableSlots = calculateAvailableSlots(
           events,
           startDate,

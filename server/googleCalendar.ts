@@ -92,10 +92,17 @@ export async function getCalendarEvents(
 ) {
   const calendar = createCalendarClient(accessToken, refreshToken, expiryDate);
 
+  // Set time to start and end of day in UTC
+  const timeMinUTC = new Date(timeMin);
+  timeMinUTC.setUTCHours(0, 0, 0, 0);
+  
+  const timeMaxUTC = new Date(timeMax);
+  timeMaxUTC.setUTCHours(23, 59, 59, 999);
+
   const response = await calendar.events.list({
     calendarId: 'primary',
-    timeMin: timeMin.toISOString(),
-    timeMax: timeMax.toISOString(),
+    timeMin: timeMinUTC.toISOString(),
+    timeMax: timeMaxUTC.toISOString(),
     singleEvents: true,
     orderBy: 'startTime',
   });
@@ -118,7 +125,12 @@ export function calculateAvailableSlots(
 
   // Iterate through each day in the range
   const currentDate = new Date(startDate);
-  while (currentDate <= endDate) {
+  currentDate.setHours(0, 0, 0, 0);
+  
+  const endDateTime = new Date(endDate);
+  endDateTime.setHours(23, 59, 59, 999);
+
+  while (currentDate <= endDateTime) {
     // Skip weekends (0 = Sunday, 6 = Saturday)
     if (currentDate.getDay() !== 0 && currentDate.getDay() !== 6) {
       const dayStart = new Date(currentDate);
@@ -129,46 +141,58 @@ export function calculateAvailableSlots(
 
       // Get events for this day
       const dayEvents = events.filter(event => {
-        const eventStart = event.start?.dateTime ? new Date(event.start.dateTime) : null;
-        const eventEnd = event.end?.dateTime ? new Date(event.end.dateTime) : null;
+        // Handle both dateTime and date formats
+        const eventStartStr = event.start?.dateTime || event.start?.date;
+        const eventEndStr = event.end?.dateTime || event.end?.date;
+        
+        if (!eventStartStr || !eventEndStr) return false;
 
-        if (!eventStart || !eventEnd) return false;
+        const eventStart = new Date(eventStartStr);
+        const eventEnd = new Date(eventEndStr);
 
+        // Check if event overlaps with this day's working hours
         return eventStart < dayEnd && eventEnd > dayStart;
       });
 
       // Sort events by start time
       dayEvents.sort((a, b) => {
-        const aStart = new Date(a.start!.dateTime!);
-        const bStart = new Date(b.start!.dateTime!);
+        const aStartStr = a.start?.dateTime || a.start?.date;
+        const bStartStr = b.start?.dateTime || b.start?.date;
+        const aStart = new Date(aStartStr!);
+        const bStart = new Date(bStartStr!);
         return aStart.getTime() - bStart.getTime();
       });
 
       // Find gaps between events
-      let currentSlotStart = dayStart;
+      let currentSlotStart = new Date(dayStart);
 
       for (const event of dayEvents) {
-        const eventStart = new Date(event.start!.dateTime!);
-        const eventEnd = new Date(event.end!.dateTime!);
+        const eventStartStr = event.start?.dateTime || event.start?.date;
+        const eventEndStr = event.end?.dateTime || event.end?.date;
+        
+        const eventStart = new Date(eventStartStr!);
+        const eventEnd = new Date(eventEndStr!);
+
+        // Adjust event times to be within working hours
+        const adjustedEventStart = eventStart < dayStart ? dayStart : eventStart;
+        const adjustedEventEnd = eventEnd > dayEnd ? dayEnd : eventEnd;
 
         // If there's a gap before this event
-        if (currentSlotStart < eventStart) {
-          const gapEnd = eventStart < dayEnd ? eventStart : dayEnd;
-          
+        if (currentSlotStart < adjustedEventStart) {
           // Split gap into slots
           let slotStart = new Date(currentSlotStart);
-          while (slotStart.getTime() + slotDurationMinutes * 60 * 1000 <= gapEnd.getTime()) {
+          while (slotStart.getTime() + slotDurationMinutes * 60 * 1000 <= adjustedEventStart.getTime()) {
             const slotEnd = new Date(slotStart.getTime() + slotDurationMinutes * 60 * 1000);
             availableSlots.push({
               start: new Date(slotStart),
               end: new Date(slotEnd),
             });
-            slotStart = slotEnd;
+            slotStart = new Date(slotEnd);
           }
         }
 
         // Move current slot start to after this event
-        currentSlotStart = eventEnd > currentSlotStart ? eventEnd : currentSlotStart;
+        currentSlotStart = adjustedEventEnd > currentSlotStart ? new Date(adjustedEventEnd) : currentSlotStart;
       }
 
       // Check if there's time left after the last event
@@ -180,13 +204,14 @@ export function calculateAvailableSlots(
             start: new Date(slotStart),
             end: new Date(slotEnd),
           });
-          slotStart = slotEnd;
+          slotStart = new Date(slotEnd);
         }
       }
     }
 
     // Move to next day
     currentDate.setDate(currentDate.getDate() + 1);
+    currentDate.setHours(0, 0, 0, 0);
   }
 
   return availableSlots;
