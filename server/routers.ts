@@ -94,20 +94,22 @@ export const appRouter = router({
         const startDate = new Date(input.startDate);
         const endDate = new Date(input.endDate);
 
-        const events = await getCalendarEvents(
-          accessToken,
-          token.refreshToken,
-          expiryDate,
-          startDate,
-          endDate
-        );
-
-        // Debug: Log events
-        console.log('Retrieved events:', JSON.stringify(events.map(e => ({
-          summary: e.summary,
-          start: e.start,
-          end: e.end
-        })), null, 2));
+        let events = [];
+        let apiError = null;
+        
+        try {
+          events = await getCalendarEvents(
+            accessToken,
+            token.refreshToken,
+            expiryDate,
+            startDate,
+            endDate
+          );
+          console.log('Retrieved events:', events.length);
+        } catch (error: any) {
+          console.error('Error fetching calendar events:', error);
+          apiError = error.message || 'Unknown error';
+        }
 
         const availableSlots = calculateAvailableSlots(
           events,
@@ -124,6 +126,15 @@ export const appRouter = router({
           slots: availableSlots,
           formattedText,
           totalSlots: availableSlots.length,
+          debug: {
+            eventCount: events.length,
+            events: events.map(e => ({
+              summary: e.summary,
+              start: e.start,
+              end: e.end,
+            })),
+            apiError,
+          },
         };
       }),
   }),

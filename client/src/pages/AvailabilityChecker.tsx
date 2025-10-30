@@ -285,6 +285,11 @@ export default function AvailabilityChecker() {
                       <CardTitle>空き時間一覧</CardTitle>
                       <CardDescription>
                         {availabilityData.totalSlots}件の空き枠が見つかりました
+                        {availabilityData.debug && (
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            (取得イベント数: {availabilityData.debug.eventCount}件)
+                          </span>
+                        )}
                       </CardDescription>
                     </div>
                     <Button
@@ -298,6 +303,25 @@ export default function AvailabilityChecker() {
                   </div>
                 </CardHeader>
                 <CardContent>
+                  {availabilityData.debug && availabilityData.debug.apiError && (
+                    <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+                      <h3 className="font-semibold mb-2 text-red-700">エラー: APIリクエスト失敗</h3>
+                      <p className="text-sm text-red-600">{availabilityData.debug.apiError}</p>
+                    </div>
+                  )}
+                  {availabilityData.debug && availabilityData.debug.eventCount > 0 && (
+                    <div className="mb-4 p-4 bg-muted rounded-md">
+                      <h3 className="font-semibold mb-2">デバッグ: 取得したイベント</h3>
+                      <pre className="text-xs overflow-auto max-h-40">
+                        {JSON.stringify(availabilityData.debug.events, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                  {availabilityData.debug && availabilityData.debug.eventCount === 0 && !availabilityData.debug.apiError && (
+                    <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                      <p className="text-sm text-yellow-700">警告: Googleカレンダーからイベントが取得できませんでした。指定期間に予定があるか確認してください。</p>
+                    </div>
+                  )}
                   <Textarea
                     value={availabilityData.formattedText}
                     readOnly
