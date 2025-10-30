@@ -51,25 +51,20 @@ export default function AvailabilityChecker() {
       }
     );
 
-  const handleCallback = trpc.calendar.handleCallback.useMutation({
-    onSuccess: () => {
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const googleConnected = urlParams.get("google_connected");
+    const error = urlParams.get("error");
+
+    if (googleConnected === "true") {
       toast.success("Googleカレンダーと連携しました");
       refetchStatus();
       window.history.replaceState({}, document.title, window.location.pathname);
-    },
-    onError: (error) => {
-      toast.error(`連携に失敗しました: ${error.message}`);
-    },
-  });
-
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get("code");
-
-    if (code && isAuthenticated) {
-      handleCallback.mutate({ code });
+    } else if (error) {
+      toast.error(`連携に失敗しました: ${error}`);
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
-  }, [isAuthenticated]);
+  }, []);
 
   useEffect(() => {
     const today = new Date();
