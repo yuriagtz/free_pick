@@ -7,11 +7,24 @@ const SCOPES = [
 ];
 
 /**
+ * Get the redirect URI based on the current environment
+ */
+function getRedirectUri(): string {
+  // In production or when BASE_URL is set, use the full URL
+  if (process.env.BASE_URL) {
+    return `${process.env.BASE_URL}/api/google/callback`;
+  }
+  
+  // Default to localhost for development
+  return 'http://localhost:3000/api/google/callback';
+}
+
+/**
  * Create OAuth2 client for Google Calendar API
  */
 export function createOAuth2Client(): Auth.OAuth2Client {
-  const redirectUri = 'http://localhost:3000/api/google/callback';
-
+  const redirectUri = getRedirectUri();
+  
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
