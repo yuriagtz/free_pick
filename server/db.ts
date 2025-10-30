@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, users, googleTokens, InsertGoogleToken, GoogleToken } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +89,48 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// Google Calendar Token Operations
+
+export async function upsertGoogleToken(token: InsertGoogleToken): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot upsert google token: database not available");
+    return;
+  }
+
+  try {
+    await db.insert(googleTokens).values(token).onDuplicateKeyUpdate({
+      set: {
+        accessToken: token.accessToken,
+        refreshToken: token.refreshToken,
+        expiryDate: token.expiryDate,
+        scope: token.scope,
+        updatedAt: new Date(),
+      },
+    });
+  } catch (error) {
+    console.error("[Database] Failed to upsert google token:", error);
+    throw error;
+  }
+}
+
+export async function getGoogleTokenByUserId(userId: number): Promise<GoogleToken | undefined> {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get google token: database not available");
+    return undefined;
+  }
+
+  const result = await db.select().from(googleTokens).where(eq(googleTokens.userId, userId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function deleteGoogleTokenByUserId(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot delete google token: database not available");
+    return;
+  }
+
+  await db.delete(googleTokens).where(eq(googleTokens.userId, userId));
+}
