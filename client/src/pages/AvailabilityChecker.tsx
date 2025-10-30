@@ -4,8 +4,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
-import { Calendar, Check, Copy, Loader2, X } from "lucide-react";
+import { Calendar, Check, Copy, Loader2, LogIn, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -116,6 +117,15 @@ export default function AvailabilityChecker() {
               空き時間を確認するにはログインしてください
             </CardDescription>
           </CardHeader>
+          <CardContent>
+            <Button
+              onClick={() => window.location.href = getLoginUrl()}
+              className="w-full"
+            >
+              <LogIn className="mr-2 h-4 w-4" />
+              ログイン
+            </Button>
+          </CardContent>
         </Card>
       </div>
     );
