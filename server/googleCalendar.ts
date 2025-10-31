@@ -143,8 +143,16 @@ export function calculateAvailableSlots(
   }
 
   // Iterate through each day in the range
-  const currentDate = new Date(startDate);
-  const endDateTime = new Date(endDate);
+  // Parse dates as YYYY-MM-DD strings to avoid timezone issues
+  const startYear = startDate.getFullYear();
+  const startMonth = startDate.getMonth();
+  const startDay = startDate.getDate();
+  const endYear = endDate.getFullYear();
+  const endMonth = endDate.getMonth();
+  const endDay = endDate.getDate();
+  
+  const currentDate = new Date(startYear, startMonth, startDay);
+  const endDateTime = new Date(endYear, endMonth, endDay);
 
   while (currentDate <= endDateTime) {
     const year = currentDate.getFullYear();

@@ -269,6 +269,7 @@ export default function AvailabilityChecker() {
                       id="startDate"
                       type="date"
                       value={startDate}
+                      min={new Date().toISOString().split('T')[0]}
                       onChange={(e) => setStartDate(e.target.value)}
                     />
                   </div>
