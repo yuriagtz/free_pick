@@ -30,3 +30,6 @@
 
 ## UI改善（追加）
 - [x] デバッグ表示を削除
+
+## バグ修正（追加3）
+- [x] env.tsにGoogle関連の環境変数（googleClientId, googleClientSecret, baseUrl）を追加

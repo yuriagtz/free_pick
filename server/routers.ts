@@ -55,15 +55,16 @@ export const appRouter = router({
       return { success: true };
     }),
 
-      getCalendarList: protectedProcedure.query(async ({ ctx }) => {
-        const token = await getGoogleTokenByUserId(ctx.user.id);
-        if (!token) {
-          throw new Error('Google Calendar not connected');
-        }
+    getCalendarList: protectedProcedure.query(async ({ ctx }) => {
+      const token = await getGoogleTokenByUserId(ctx.user.id);
+      if (!token) {
+        throw new Error('Google Calendar not connected');
+      }
 
-        const accessToken = token.accessToken;
-        const expiryDate = token.expiryDate.getTime();
+      const accessToken = token.accessToken;
+      const expiryDate = token.expiryDate.getTime();
 
+      try {
         const calendars = await getCalendarList(
           accessToken,
           token.refreshToken,
@@ -71,9 +72,13 @@ export const appRouter = router({
         );
 
         return { calendars };
-      }),
+      } catch (error: any) {
+        console.error('Error fetching calendar list:', error);
+        throw new Error(`Failed to fetch calendar list: ${error.message}`);
+      }
+    }),
 
-      getAvailableSlots: protectedProcedure
+    getAvailableSlots: protectedProcedure
       .input(
         z.object({
           startDate: z.string(),
