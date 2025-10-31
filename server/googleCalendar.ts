@@ -268,20 +268,28 @@ export function calculateAvailableSlots(
 
       // If there's a gap before this event
       if (currentSlotStart < adjustedEventStart) {
-        // Split gap into slots
-        let slotStart = new Date(currentSlotStart);
-        while (slotStart.getTime() + slotDurationMinutes * 60 * 1000 <= adjustedEventStart.getTime()) {
-          const slotEnd = new Date(slotStart.getTime() + slotDurationMinutes * 60 * 1000);
-          console.log('[DEBUG] Adding slot (before event):', {
-            date: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
-            start: slotStart.toISOString(),
-            end: slotEnd.toISOString()
-          });
+        if (mergeSlots) {
+          // When merging, create one slot for the entire gap
           availableSlots.push({
-            start: new Date(slotStart),
-            end: new Date(slotEnd),
+            start: new Date(currentSlotStart),
+            end: new Date(adjustedEventStart),
           });
-          slotStart = new Date(slotEnd);
+        } else {
+          // Split gap into slots
+          let slotStart = new Date(currentSlotStart);
+          while (slotStart.getTime() + slotDurationMinutes * 60 * 1000 <= adjustedEventStart.getTime()) {
+            const slotEnd = new Date(slotStart.getTime() + slotDurationMinutes * 60 * 1000);
+            console.log('[DEBUG] Adding slot (before event):', {
+              date: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+              start: slotStart.toISOString(),
+              end: slotEnd.toISOString()
+            });
+            availableSlots.push({
+              start: new Date(slotStart),
+              end: new Date(slotEnd),
+            });
+            slotStart = new Date(slotEnd);
+          }
         }
       }
 
@@ -297,19 +305,27 @@ export function calculateAvailableSlots(
       hasTimeLeft: currentSlotStart < dayEnd
     });
     if (currentSlotStart < dayEnd) {
-      let slotStart = new Date(currentSlotStart);
-      while (slotStart.getTime() + slotDurationMinutes * 60 * 1000 <= dayEnd.getTime()) {
-        const slotEnd = new Date(slotStart.getTime() + slotDurationMinutes * 60 * 1000);
-        console.log('[DEBUG] Adding slot:', {
-          date: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
-          start: slotStart.toISOString(),
-          end: slotEnd.toISOString()
-        });
+      if (mergeSlots) {
+        // When merging, create one slot for the entire remaining time
         availableSlots.push({
-          start: new Date(slotStart),
-          end: new Date(slotEnd),
+          start: new Date(currentSlotStart),
+          end: new Date(dayEnd),
         });
-        slotStart = new Date(slotEnd);
+      } else {
+        let slotStart = new Date(currentSlotStart);
+        while (slotStart.getTime() + slotDurationMinutes * 60 * 1000 <= dayEnd.getTime()) {
+          const slotEnd = new Date(slotStart.getTime() + slotDurationMinutes * 60 * 1000);
+          console.log('[DEBUG] Adding slot:', {
+            date: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+            start: slotStart.toISOString(),
+            end: slotEnd.toISOString()
+          });
+          availableSlots.push({
+            start: new Date(slotStart),
+            end: new Date(slotEnd),
+          });
+          slotStart = new Date(slotEnd);
+        }
       }
     }
 
@@ -335,20 +351,8 @@ export function calculateAvailableSlots(
   }, {} as Record<string, number>);
   console.log('[DEBUG] Slots by date:', slotsByDate);
 
-  // Merge slots if requested
-  if (mergeSlots) {
-    const merged = mergeConsecutiveSlots(availableSlots);
-    console.log('[DEBUG] After merge:', merged.length, 'slots');
-    return {
-      slots: merged,
-      debug: {
-        startDateNum,
-        endDateNum,
-        slotsByDate,
-        processedDates
-      }
-    };
-  }
+  // When mergeSlots is true, slots are already merged during generation
+  // No need to call mergeConsecutiveSlots again
 
   return {
     slots: availableSlots,

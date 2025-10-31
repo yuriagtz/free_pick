@@ -91,9 +91,24 @@ export default function AvailabilityChecker() {
     setEndDate(nextWeek.toISOString().split("T")[0]);
   }, []);
 
+  // Auto-select primary calendar when calendar list is loaded
+  useEffect(() => {
+    if (calendarListData && calendarListData.calendars.length > 0) {
+      const primaryCalendar = calendarListData.calendars.find(cal => cal.primary);
+      if (primaryCalendar && !selectedCalendarIds.includes(primaryCalendar.id)) {
+        setSelectedCalendarIds([primaryCalendar.id]);
+      }
+    }
+  }, [calendarListData]);
+
   const handleCheckAvailability = () => {
     if (!startDate || !endDate) {
       toast.error("開始日と終了日を入力してください");
+      return;
+    }
+
+    if (selectedCalendarIds.length === 0) {
+      toast.error("カレンダーを少なくとも1つ選択してください");
       return;
     }
 
@@ -228,7 +243,19 @@ export default function AvailabilityChecker() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {calendarListData.calendars.map((calendar) => (
+                  {selectedCalendarIds.length === 0 && (
+                    <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3 mb-3">
+                      ⚠️ カレンダーを少なくとも1つ選択してください
+                    </div>
+                  )}
+                  {calendarListData.calendars
+                    .sort((a, b) => {
+                      // Primary calendar first
+                      if (a.primary && !b.primary) return -1;
+                      if (!a.primary && b.primary) return 1;
+                      return 0;
+                    })
+                    .map((calendar) => (
                     <div key={calendar.id} className="flex items-center space-x-2">
                       <Checkbox
                         id={calendar.id}
@@ -310,7 +337,10 @@ export default function AvailabilityChecker() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="slotDuration">枠の長さ(分)</Label>
+                    <Label htmlFor="slotDuration" className={mergeSlots ? "text-muted-foreground" : ""}>
+                      枠の長さ(分)
+                      {mergeSlots && <span className="text-xs ml-2">(連続表示時は無効)</span>}
+                    </Label>
                     <Input
                       id="slotDuration"
                       type="number"
@@ -319,6 +349,8 @@ export default function AvailabilityChecker() {
                       step="15"
                       value={slotDuration}
                       onChange={(e) => setSlotDuration(Number(e.target.value))}
+                      disabled={mergeSlots}
+                      className={mergeSlots ? "bg-muted" : ""}
                     />
                   </div>
                 </div>
@@ -407,7 +439,7 @@ export default function AvailabilityChecker() {
 
                 <Button
                   onClick={handleCheckAvailability}
-                  disabled={slotsLoading}
+                  disabled={slotsLoading || selectedCalendarIds.length === 0}
                   className="w-full"
                 >
                   {slotsLoading ? (
