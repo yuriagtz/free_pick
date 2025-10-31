@@ -152,7 +152,7 @@ export function calculateAvailableSlots(
   const endDay = endDate.getDate();
   
   const currentDate = new Date(startYear, startMonth, startDay);
-  const endDateTime = new Date(endYear, endMonth, endDay);
+  const endDateTime = new Date(endYear, endMonth, endDay, 23, 59, 59);
 
   while (currentDate <= endDateTime) {
     const year = currentDate.getFullYear();
