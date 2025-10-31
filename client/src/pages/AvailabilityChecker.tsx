@@ -129,12 +129,14 @@ export default function AvailabilityChecker() {
     }
   };
 
-  // Auto-redirect to login if not authenticated
+  // Auto-redirect to login if not authenticated (only on initial load)
   useEffect(() => {
-    if (!isAuthenticated) {
+    const hasRedirected = sessionStorage.getItem('login_redirect');
+    if (!isAuthenticated && !hasRedirected) {
+      sessionStorage.setItem('login_redirect', 'true');
       window.location.href = getLoginUrl();
     }
-  }, [isAuthenticated]);
+  }, []);
 
   if (!isAuthenticated) {
     return (
