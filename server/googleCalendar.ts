@@ -114,7 +114,10 @@ export function calculateAvailableSlots(
   endDate: Date,
   workingHoursStart: number = 9, // 9 AM JST
   workingHoursEnd: number = 18, // 6 PM JST
-  slotDurationMinutes: number = 30
+  slotDurationMinutes: number = 30,
+  bufferMinutes: number = 0, // Buffer time before/after events
+  mergeSlots: boolean = false, // Merge consecutive slots
+  excludedDays: number[] = [] // Days to exclude (0=Sunday, 6=Saturday)
 ): Array<{ start: Date; end: Date }> {
   const availableSlots: Array<{ start: Date; end: Date }> = [];
   const JST_OFFSET = 9 * 60; // JST is UTC+9
@@ -149,8 +152,8 @@ export function calculateAvailableSlots(
     const day = currentDate.getDate();
     const dayOfWeek = currentDate.getDay();
 
-    // Skip weekends (0 = Sunday, 6 = Saturday)
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+    // Skip excluded days
+    if (!excludedDays.includes(dayOfWeek)) {
       // Create working hours in JST
       const dayStart = createJSTDate(year, month, day, workingHoursStart);
       const dayEnd = createJSTDate(year, month, day, workingHoursEnd);
@@ -183,9 +186,12 @@ export function calculateAvailableSlots(
         
         if (!eventStart || !eventEnd) continue;
 
-        // Adjust event times to be within working hours
-        const adjustedEventStart = eventStart < dayStart ? dayStart : eventStart;
-        const adjustedEventEnd = eventEnd > dayEnd ? dayEnd : eventEnd;
+        // Adjust event times to be within working hours and add buffer
+        let adjustedEventStart = new Date(eventStart.getTime() - bufferMinutes * 60 * 1000);
+        let adjustedEventEnd = new Date(eventEnd.getTime() + bufferMinutes * 60 * 1000);
+        
+        adjustedEventStart = adjustedEventStart < dayStart ? dayStart : adjustedEventStart;
+        adjustedEventEnd = adjustedEventEnd > dayEnd ? dayEnd : adjustedEventEnd;
 
         // If there's a gap before this event
         if (currentSlotStart < adjustedEventStart) {
@@ -223,7 +229,41 @@ export function calculateAvailableSlots(
     currentDate.setDate(currentDate.getDate() + 1);
   }
 
+  // Merge consecutive slots if requested
+  if (mergeSlots) {
+    return mergeConsecutiveSlots(availableSlots);
+  }
+
   return availableSlots;
+}
+
+/**
+ * Merge consecutive time slots into larger blocks
+ */
+function mergeConsecutiveSlots(slots: Array<{ start: Date; end: Date }>): Array<{ start: Date; end: Date }> {
+  if (slots.length === 0) return [];
+
+  const merged: Array<{ start: Date; end: Date }> = [];
+  let currentSlot = { start: new Date(slots[0].start), end: new Date(slots[0].end) };
+
+  for (let i = 1; i < slots.length; i++) {
+    const slot = slots[i];
+    
+    // Check if this slot is consecutive (starts exactly when previous ends)
+    if (slot.start.getTime() === currentSlot.end.getTime()) {
+      // Extend current slot
+      currentSlot.end = new Date(slot.end);
+    } else {
+      // Save current slot and start a new one
+      merged.push(currentSlot);
+      currentSlot = { start: new Date(slot.start), end: new Date(slot.end) };
+    }
+  }
+
+  // Don't forget the last slot
+  merged.push(currentSlot);
+
+  return merged;
 }
 
 /**

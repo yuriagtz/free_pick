@@ -19,6 +19,9 @@ export default function AvailabilityChecker() {
   const [workingHoursEnd, setWorkingHoursEnd] = useState(18);
   const [slotDuration, setSlotDuration] = useState(30);
   const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>(['primary']);
+  const [bufferMinutes, setBufferMinutes] = useState(0);
+  const [mergeSlots, setMergeSlots] = useState(false);
+  const [excludedDays, setExcludedDays] = useState<number[]>([]);
 
   const { data: connectionStatus, isLoading: statusLoading, refetch: refetchStatus } = 
     trpc.calendar.getConnectionStatus.useQuery(undefined, {
@@ -53,6 +56,9 @@ export default function AvailabilityChecker() {
         workingHoursEnd,
         slotDurationMinutes: slotDuration,
         calendarIds: selectedCalendarIds,
+        bufferMinutes,
+        mergeSlots,
+        excludedDays,
       },
       {
         enabled: false,
@@ -310,6 +316,74 @@ export default function AvailabilityChecker() {
                       onChange={(e) => setSlotDuration(Number(e.target.value))}
                     />
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="bufferMinutes">予定の前後バッファ時間(分)</Label>
+                  <Input
+                    id="bufferMinutes"
+                    type="number"
+                    min="0"
+                    max="120"
+                    step="5"
+                    value={bufferMinutes}
+                    onChange={(e) => setBufferMinutes(Number(e.target.value))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    予定の前後に指定した分数を空き枠から除外します
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <Label>曜日選択</Label>
+                  <div className="flex flex-wrap gap-3">
+                    {[
+                      { value: 0, label: '日' },
+                      { value: 1, label: '月' },
+                      { value: 2, label: '火' },
+                      { value: 3, label: '水' },
+                      { value: 4, label: '木' },
+                      { value: 5, label: '金' },
+                      { value: 6, label: '土' },
+                    ].map((day) => (
+                      <div key={day.value} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`day-${day.value}`}
+                          checked={!excludedDays.includes(day.value)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setExcludedDays(excludedDays.filter(d => d !== day.value));
+                            } else {
+                              setExcludedDays([...excludedDays, day.value]);
+                            }
+                          }}
+                        />
+                        <label
+                          htmlFor={`day-${day.value}`}
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                        >
+                          {day.label}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    チェックを外した曜日は除外されます
+                  </p>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="mergeSlots"
+                    checked={mergeSlots}
+                    onCheckedChange={(checked) => setMergeSlots(checked as boolean)}
+                  />
+                  <label
+                    htmlFor="mergeSlots"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    連続した空き時間をまとめて表示
+                  </label>
                 </div>
 
                 <Button

@@ -87,6 +87,9 @@ export const appRouter = router({
           workingHoursEnd: z.number().min(0).max(23),
           slotDurationMinutes: z.number().min(15).max(240),
           calendarIds: z.array(z.string()).optional(),
+          bufferMinutes: z.number().min(0).max(120).optional(),
+          mergeSlots: z.boolean().optional(),
+          excludedDays: z.array(z.number().min(0).max(6)).optional(),
         })
       )
       .query(async ({ ctx, input }) => {
@@ -141,7 +144,10 @@ export const appRouter = router({
           endDate,
           input.workingHoursStart,
           input.workingHoursEnd,
-          input.slotDurationMinutes
+          input.slotDurationMinutes,
+          input.bufferMinutes || 0,
+          input.mergeSlots || false,
+          input.excludedDays || []
         );
 
         const formattedText = formatSlotsAsText(availableSlots);
