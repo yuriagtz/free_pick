@@ -19,7 +19,8 @@ export default function AvailabilityChecker() {
   const [workingHoursEnd, setWorkingHoursEnd] = useState(18);
   const [slotDuration, setSlotDuration] = useState(30);
   const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>(['primary']);
-  const [bufferMinutes, setBufferMinutes] = useState(0);
+  const [bufferBeforeMinutes, setBufferBeforeMinutes] = useState(0);
+  const [bufferAfterMinutes, setBufferAfterMinutes] = useState(0);
   const [mergeSlots, setMergeSlots] = useState(false);
   const [excludedDays, setExcludedDays] = useState<number[]>([]);
   const [ignoreAllDayEvents, setIgnoreAllDayEvents] = useState(false);
@@ -57,7 +58,8 @@ export default function AvailabilityChecker() {
         workingHoursEnd,
         slotDurationMinutes: slotDuration,
         calendarIds: selectedCalendarIds,
-        bufferMinutes,
+        bufferBeforeMinutes,
+        bufferAfterMinutes,
         mergeSlots,
         excludedDays,
         ignoreAllDayEvents,
@@ -175,8 +177,8 @@ export default function AvailabilityChecker() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
       <div className="container max-w-4xl">
         <div className="mb-8 text-center">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">空き時間抽出</h1>
-          <p className="text-gray-600">Googleカレンダーから空き時間を自動抽出します</p>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">FreePick</h1>
+          <p className="text-gray-600">Googleカレンダーから空き時間を自動抽出するサービスです</p>
         </div>
 
         {!connectionStatus?.connected ? (
@@ -356,16 +358,33 @@ export default function AvailabilityChecker() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="bufferMinutes">予定の前後バッファ時間(分)</Label>
-                  <Input
-                    id="bufferMinutes"
-                    type="number"
-                    min="0"
-                    max="120"
-                    step="5"
-                    value={bufferMinutes}
-                    onChange={(e) => setBufferMinutes(Number(e.target.value))}
-                  />
+                  <Label>バッファ時間</Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="bufferBeforeMinutes">予定前(分)</Label>
+                      <Input
+                        id="bufferBeforeMinutes"
+                        type="number"
+                        min="0"
+                        max="120"
+                        step="5"
+                        value={bufferBeforeMinutes}
+                        onChange={(e) => setBufferBeforeMinutes(Number(e.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="bufferAfterMinutes">予定後(分)</Label>
+                      <Input
+                        id="bufferAfterMinutes"
+                        type="number"
+                        min="0"
+                        max="120"
+                        step="5"
+                        value={bufferAfterMinutes}
+                        onChange={(e) => setBufferAfterMinutes(Number(e.target.value))}
+                      />
+                    </div>
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     予定の前後に指定した分数を空き枠から除外します
                   </p>

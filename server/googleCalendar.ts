@@ -115,7 +115,8 @@ export function calculateAvailableSlots(
   workingHoursStart: number = 9, // 9 AM JST
   workingHoursEnd: number = 18, // 6 PM JST
   slotDurationMinutes: number = 30,
-  bufferMinutes: number = 0, // Buffer time before/after events
+  bufferBeforeMinutes: number = 0, // Buffer time before events
+  bufferAfterMinutes: number = 0, // Buffer time after events
   excludedDays: number[] = [], // Days to exclude (0=Sunday, 6=Saturday)
   mergeSlots: boolean = false, // Merge consecutive slots
   ignoreAllDayEvents: boolean = true // Ignore all-day events (birthdays, holidays)
@@ -260,8 +261,8 @@ export function calculateAvailableSlots(
       if (!eventStart || !eventEnd) continue;
 
       // Adjust event times to be within working hours and add buffer
-      let adjustedEventStart = new Date(eventStart.getTime() - bufferMinutes * 60 * 1000);
-      let adjustedEventEnd = new Date(eventEnd.getTime() + bufferMinutes * 60 * 1000);
+      let adjustedEventStart = new Date(eventStart.getTime() - bufferBeforeMinutes * 60 * 1000);
+      let adjustedEventEnd = new Date(eventEnd.getTime() + bufferAfterMinutes * 60 * 1000);
       
       adjustedEventStart = adjustedEventStart < dayStart ? dayStart : adjustedEventStart;
       adjustedEventEnd = adjustedEventEnd > dayEnd ? dayEnd : adjustedEventEnd;
