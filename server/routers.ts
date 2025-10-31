@@ -90,6 +90,7 @@ export const appRouter = router({
           bufferMinutes: z.number().min(0).max(120).optional(),
           mergeSlots: z.boolean().optional(),
           excludedDays: z.array(z.number().min(0).max(6)).optional(),
+          ignoreAllDayEvents: z.boolean().optional(),
         })
       )
       .query(async ({ ctx, input }) => {
@@ -102,30 +103,26 @@ export const appRouter = router({
         let accessToken = token.accessToken;
         let expiryDate = token.expiryDate.getTime();
 
-        if (expiryDate < Date.now()) {
-          const newTokens = await refreshAccessToken(token.refreshToken);
-          if (newTokens.access_token && newTokens.expiry_date) {
-            accessToken = newTokens.access_token;
-            expiryDate = newTokens.expiry_date;
+        // Token refresh is handled automatically by the Google Calendar API client
 
-            await upsertGoogleToken({
-              userId: ctx.user.id,
-              accessToken: newTokens.access_token,
-              refreshToken: token.refreshToken,
-              expiryDate: new Date(newTokens.expiry_date),
-              scope: token.scope,
-            });
-          }
-        }
-
-        // Parse dates as YYYY-MM-DD in JST timezone
-        const [startYear, startMonth, startDay] = input.startDate.split('-').map(Number);
-        const [endYear, endMonth, endDay] = input.endDate.split('-').map(Number);
+        // Pass date strings directly to avoid timezone issues
+        // calculateAvailableSlots will parse them correctly
+        const startDateStr = input.startDate; // YYYY-MM-DD
+        const endDateStr = input.endDate; // YYYY-MM-DD
+        
+        // Create Date objects for API calls (need full Date objects for Google Calendar API)
+        // For Google Calendar API, we need to fetch events up to the end of the end date
+        const [startYear, startMonth, startDay] = startDateStr.split('-').map(Number);
+        const [endYear, endMonth, endDay] = endDateStr.split('-').map(Number);
         const startDate = new Date(startYear, startMonth - 1, startDay);
-        const endDate = new Date(endYear, endMonth - 1, endDay);
+        // Add 1 day to endDate to include the entire end date
+        const endDate = new Date(endYear, endMonth - 1, endDay + 1);
 
         let events = [];
         let apiError = null;
+        
+        const calendarIds = input.calendarIds || ['primary'];
+        console.log('[DEBUG] Calendar IDs:', calendarIds);
         
         try {
           events = await getCalendarEvents(
@@ -134,31 +131,64 @@ export const appRouter = router({
             expiryDate,
             startDate,
             endDate,
-            input.calendarIds || ['primary']
+            calendarIds
           );
         } catch (error: any) {
           console.error('Error fetching calendar events:', error);
           throw error;
         }
 
-        const availableSlots = calculateAvailableSlots(
+        const result = calculateAvailableSlots(
           events,
-          startDate,
-          endDate,
+          startDateStr,
+          endDateStr,
           input.workingHoursStart,
           input.workingHoursEnd,
           input.slotDurationMinutes,
           input.bufferMinutes || 0,
+          input.excludedDays || [],
           input.mergeSlots || false,
-          input.excludedDays || []
+          input.ignoreAllDayEvents ?? false // Default to false (birthdays are always ignored)
         );
+        
+        const availableSlots = result.slots;
 
         const formattedText = formatSlotsAsText(availableSlots);
+
+        // Count slots by date
+        const slotsByDate: Record<string, number> = {};
+        availableSlots.forEach(slot => {
+          const date = new Date(slot.start).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' });
+          slotsByDate[date] = (slotsByDate[date] || 0) + 1;
+        });
+
+        const debugInfo = {
+          inputStartDate: input.startDate,
+          inputEndDate: input.endDate,
+          parsedStartDate: startDate.toISOString(),
+          parsedEndDate: endDate.toISOString(),
+          totalEvents: events.length,
+          startDateComponents: {
+            year: startDate.getFullYear(),
+            month: startDate.getMonth(),
+            day: startDate.getDate()
+          },
+          endDateComponents: {
+            year: endDate.getFullYear(),
+            month: endDate.getMonth(),
+            day: endDate.getDate()
+          },
+          startDateNum: result.debug.startDateNum,
+          endDateNum: result.debug.endDateNum,
+          processedDates: result.debug.processedDates,
+          slotsByDate
+        };
 
         return {
           slots: availableSlots,
           formattedText,
           totalSlots: availableSlots.length,
+          debug: debugInfo,
         };
       }),
   }),

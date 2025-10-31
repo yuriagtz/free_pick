@@ -22,6 +22,7 @@ export default function AvailabilityChecker() {
   const [bufferMinutes, setBufferMinutes] = useState(0);
   const [mergeSlots, setMergeSlots] = useState(false);
   const [excludedDays, setExcludedDays] = useState<number[]>([]);
+  const [ignoreAllDayEvents, setIgnoreAllDayEvents] = useState(false);
 
   const { data: connectionStatus, isLoading: statusLoading, refetch: refetchStatus } = 
     trpc.calendar.getConnectionStatus.useQuery(undefined, {
@@ -59,6 +60,7 @@ export default function AvailabilityChecker() {
         bufferMinutes,
         mergeSlots,
         excludedDays,
+        ignoreAllDayEvents,
       },
       {
         enabled: false,
@@ -389,6 +391,20 @@ export default function AvailabilityChecker() {
                   </label>
                 </div>
 
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="ignoreAllDayEvents"
+                    checked={ignoreAllDayEvents}
+                    onCheckedChange={(checked) => setIgnoreAllDayEvents(checked as boolean)}
+                  />
+                  <label
+                    htmlFor="ignoreAllDayEvents"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    終日予定を除外（誕生日は常に除外）
+                  </label>
+                </div>
+
                 <Button
                   onClick={handleCheckAvailability}
                   disabled={slotsLoading}
@@ -410,15 +426,48 @@ export default function AvailabilityChecker() {
             </Card>
 
             {availabilityData && (
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle>空き時間一覧</CardTitle>
-                      <CardDescription>
-                        {availabilityData.totalSlots}件の空き枠が見つかりました
-                      </CardDescription>
-                    </div>
+              <>
+                {/* Debug Info - Removed for production */}
+                {false && availabilityData.debug && (
+                  <Card className="mb-4 bg-yellow-50 border-yellow-200">
+                    <CardHeader>
+                      <CardTitle className="text-sm">デバッグ情報</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-xs font-mono space-y-1">
+                      <div>入力開始日: {availabilityData.debug.inputStartDate}</div>
+                      <div>入力終了日: {availabilityData.debug.inputEndDate}</div>
+                      <div>パース後開始日: {availabilityData.debug.parsedStartDate}</div>
+                      <div>パース後終了日: {availabilityData.debug.parsedEndDate}</div>
+                      {availabilityData.debug.startDateComponents && (
+                        <div>開始日コンポーネント: {JSON.stringify(availabilityData.debug.startDateComponents)}</div>
+                      )}
+                      {availabilityData.debug.endDateComponents && (
+                        <div>終了日コンポーネント: {JSON.stringify(availabilityData.debug.endDateComponents)}</div>
+                      )}
+                      {availabilityData.debug.startDateNum && (
+                        <div className="font-bold text-blue-600">startDateNum: {availabilityData.debug.startDateNum}</div>
+                      )}
+                      {availabilityData.debug.endDateNum && (
+                        <div className="font-bold text-blue-600">endDateNum: {availabilityData.debug.endDateNum}</div>
+                      )}
+                      {availabilityData.debug.processedDates && (
+                        <div className="font-bold text-green-600">処理された日付: {availabilityData.debug.processedDates.join(', ')}</div>
+                      )}
+                      <div>イベント数: {availabilityData.debug.totalEvents}</div>
+                      <div>日付別スロット数:</div>
+                      <pre className="pl-4">{JSON.stringify(availabilityData.debug.slotsByDate, null, 2)}</pre>
+                    </CardContent>
+                  </Card>
+                )}
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle>空き時間一覧</CardTitle>
+                        <CardDescription>
+                          {availabilityData.totalSlots}件の空き枠が見つかりました
+                        </CardDescription>
+                      </div>
                     <Button
                       variant="outline"
                       size="sm"
@@ -437,6 +486,7 @@ export default function AvailabilityChecker() {
                   />
                 </CardContent>
               </Card>
+              </>
             )}
           </div>
         )}

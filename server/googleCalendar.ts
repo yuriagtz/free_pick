@@ -110,15 +110,16 @@ export async function getCalendarEvents(
  */
 export function calculateAvailableSlots(
   events: any[],
-  startDate: Date,
-  endDate: Date,
+  startDateStr: string, // YYYY-MM-DD
+  endDateStr: string, // YYYY-MM-DD
   workingHoursStart: number = 9, // 9 AM JST
   workingHoursEnd: number = 18, // 6 PM JST
   slotDurationMinutes: number = 30,
   bufferMinutes: number = 0, // Buffer time before/after events
+  excludedDays: number[] = [], // Days to exclude (0=Sunday, 6=Saturday)
   mergeSlots: boolean = false, // Merge consecutive slots
-  excludedDays: number[] = [] // Days to exclude (0=Sunday, 6=Saturday)
-): Array<{ start: Date; end: Date }> {
+  ignoreAllDayEvents: boolean = true // Ignore all-day events (birthdays, holidays)
+) {
   const availableSlots: Array<{ start: Date; end: Date }> = [];
   const JST_OFFSET = 9 * 60; // JST is UTC+9
 
@@ -144,86 +145,138 @@ export function calculateAvailableSlots(
 
   // Iterate through each day in the range
   // Parse dates as YYYY-MM-DD strings to avoid timezone issues
-  const startYear = startDate.getFullYear();
-  const startMonth = startDate.getMonth();
-  const startDay = startDate.getDate();
-  const endYear = endDate.getFullYear();
-  const endMonth = endDate.getMonth();
-  const endDay = endDate.getDate();
+  const [startYear, startMonth0, startDay] = startDateStr.split('-').map(Number);
+  const [endYear, endMonth0, endDay] = endDateStr.split('-').map(Number);
+  const startMonth = startMonth0 - 1; // Convert to 0-based
+  const endMonth = endMonth0 - 1; // Convert to 0-based
   
-  const currentDate = new Date(startYear, startMonth, startDay);
-  const endDateTime = new Date(endYear, endMonth, endDay, 23, 59, 59);
+  // Calculate total days using simple date arithmetic (timezone-independent)
+  const startDateNum = startYear * 10000 + (startMonth + 1) * 100 + startDay;
+  const endDateNum = endYear * 10000 + (endMonth + 1) * 100 + endDay;
+  
+  console.log('[DEBUG] Date range:', {
+    startDateStr,
+    endDateStr,
+    startYear,
+    startMonth,
+    startDay,
+    endYear,
+    endMonth,
+    endDay,
+    startDateNum,
+    endDateNum
+  });
 
-  while (currentDate <= endDateTime) {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    const day = currentDate.getDate();
-    const dayOfWeek = currentDate.getDay();
+  // Iterate through each day from start to end (inclusive)
+  let currentYear = startYear;
+  let currentMonth = startMonth;
+  let currentDay = startDay;
+  const processedDates: string[] = [];
+  
+  while (true) {
+    const currentDateNum = currentYear * 10000 + (currentMonth + 1) * 100 + currentDay;
+    if (currentDateNum > endDateNum) break;
+    
+    const year = currentYear;
+    const month = currentMonth;
+    const day = currentDay;
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    processedDates.push(dateStr);
+    
+    // Calculate day of week
+    const tempDate = new Date(year, month, day);
+    const dayOfWeek = tempDate.getDay();
+
+    console.log('[DEBUG] Processing day:', dateStr, 'dayOfWeek:', dayOfWeek, 'currentDateNum:', currentDateNum, 'endDateNum:', endDateNum);
 
     // Skip excluded days
-    if (!excludedDays.includes(dayOfWeek)) {
-      // Create working hours in JST
-      const dayStart = createJSTDate(year, month, day, workingHoursStart);
-      const dayEnd = createJSTDate(year, month, day, workingHoursEnd);
-
-      // Get events for this day
-      const dayEvents = events.filter(event => {
-        const eventStart = parseEventTime(event.start?.dateTime, event.start?.date);
-        const eventEnd = parseEventTime(event.end?.dateTime, event.end?.date);
-        
-        if (!eventStart || !eventEnd) return false;
-
-        // Check if event overlaps with this day's working hours
-        return eventStart < dayEnd && eventEnd > dayStart;
-      });
-
-      // Sort events by start time
-      dayEvents.sort((a, b) => {
-        const aStart = parseEventTime(a.start?.dateTime, a.start?.date);
-        const bStart = parseEventTime(b.start?.dateTime, b.start?.date);
-        if (!aStart || !bStart) return 0;
-        return aStart.getTime() - bStart.getTime();
-      });
-
-      // Find gaps between events
-      let currentSlotStart = new Date(dayStart);
-
-      for (const event of dayEvents) {
-        const eventStart = parseEventTime(event.start?.dateTime, event.start?.date);
-        const eventEnd = parseEventTime(event.end?.dateTime, event.end?.date);
-        
-        if (!eventStart || !eventEnd) continue;
-
-        // Adjust event times to be within working hours and add buffer
-        let adjustedEventStart = new Date(eventStart.getTime() - bufferMinutes * 60 * 1000);
-        let adjustedEventEnd = new Date(eventEnd.getTime() + bufferMinutes * 60 * 1000);
-        
-        adjustedEventStart = adjustedEventStart < dayStart ? dayStart : adjustedEventStart;
-        adjustedEventEnd = adjustedEventEnd > dayEnd ? dayEnd : adjustedEventEnd;
-
-        // If there's a gap before this event
-        if (currentSlotStart < adjustedEventStart) {
-          // Split gap into slots
-          let slotStart = new Date(currentSlotStart);
-          while (slotStart.getTime() + slotDurationMinutes * 60 * 1000 <= adjustedEventStart.getTime()) {
-            const slotEnd = new Date(slotStart.getTime() + slotDurationMinutes * 60 * 1000);
-            availableSlots.push({
-              start: new Date(slotStart),
-              end: new Date(slotEnd),
-            });
-            slotStart = new Date(slotEnd);
-          }
+    if (excludedDays.includes(dayOfWeek)) {
+      console.log('[DEBUG] Skipping excluded day:', dayOfWeek);
+      // Move to next day before continuing
+      currentDay++;
+      const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+      if (currentDay > daysInMonth) {
+        currentDay = 1;
+        currentMonth++;
+        if (currentMonth > 11) {
+          currentMonth = 0;
+          currentYear++;
         }
-
-        // Move current slot start to after this event
-        currentSlotStart = adjustedEventEnd > currentSlotStart ? new Date(adjustedEventEnd) : currentSlotStart;
       }
+      continue;
+    }
 
-      // Check if there's time left after the last event
-      if (currentSlotStart < dayEnd) {
+    // Calculate working hours in JST
+    const dayStart = createJSTDate(year, month, day, workingHoursStart);
+    const dayEnd = createJSTDate(year, month, day, workingHoursEnd);
+    
+    // Get events for this day
+    const dayEvents = events.filter(event => {
+      const summary = event.summary || '';
+      const isAllDayEvent = !!event.start?.date;
+      
+      // Always ignore all-day birthday events
+      if (isAllDayEvent && (summary.includes('誕生日') || summary.toLowerCase().includes('birthday'))) {
+        console.log('[DEBUG] Ignoring all-day birthday event:', event.summary);
+        return false;
+      }
+      
+      // Ignore other all-day events if requested (holidays, etc.)
+      if (ignoreAllDayEvents && isAllDayEvent) {
+        console.log('[DEBUG] Ignoring all-day event:', event.summary);
+        return false;
+      }
+      
+      const eventStart = parseEventTime(event.start?.dateTime, event.start?.date);
+      const eventEnd = parseEventTime(event.end?.dateTime, event.end?.date);
+      if (!eventStart || !eventEnd) return false;
+      return eventStart < dayEnd && eventEnd > dayStart;
+    });
+    
+    console.log('[DEBUG] Day boundaries:', {
+      date: dateStr,
+      dayStart: dayStart.toISOString(),
+      dayEnd: dayEnd.toISOString(),
+      workingHoursStart,
+      workingHoursEnd,
+      dayEventsCount: dayEvents.length
+    });
+
+    // Sort events by start time
+    dayEvents.sort((a, b) => {
+      const aStart = parseEventTime(a.start?.dateTime, a.start?.date);
+      const bStart = parseEventTime(b.start?.dateTime, b.start?.date);
+      if (!aStart || !bStart) return 0;
+      return aStart.getTime() - bStart.getTime();
+    });
+
+    // Find gaps between events
+    let currentSlotStart = new Date(dayStart);
+
+    for (const event of dayEvents) {
+      const eventStart = parseEventTime(event.start?.dateTime, event.start?.date);
+      const eventEnd = parseEventTime(event.end?.dateTime, event.end?.date);
+      
+      if (!eventStart || !eventEnd) continue;
+
+      // Adjust event times to be within working hours and add buffer
+      let adjustedEventStart = new Date(eventStart.getTime() - bufferMinutes * 60 * 1000);
+      let adjustedEventEnd = new Date(eventEnd.getTime() + bufferMinutes * 60 * 1000);
+      
+      adjustedEventStart = adjustedEventStart < dayStart ? dayStart : adjustedEventStart;
+      adjustedEventEnd = adjustedEventEnd > dayEnd ? dayEnd : adjustedEventEnd;
+
+      // If there's a gap before this event
+      if (currentSlotStart < adjustedEventStart) {
+        // Split gap into slots
         let slotStart = new Date(currentSlotStart);
-        while (slotStart.getTime() + slotDurationMinutes * 60 * 1000 <= dayEnd.getTime()) {
+        while (slotStart.getTime() + slotDurationMinutes * 60 * 1000 <= adjustedEventStart.getTime()) {
           const slotEnd = new Date(slotStart.getTime() + slotDurationMinutes * 60 * 1000);
+          console.log('[DEBUG] Adding slot (before event):', {
+            date: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+            start: slotStart.toISOString(),
+            end: slotEnd.toISOString()
+          });
           availableSlots.push({
             start: new Date(slotStart),
             end: new Date(slotEnd),
@@ -231,18 +284,81 @@ export function calculateAvailableSlots(
           slotStart = new Date(slotEnd);
         }
       }
+
+      // Move current slot start to after this event
+      currentSlotStart = adjustedEventEnd > currentSlotStart ? new Date(adjustedEventEnd) : currentSlotStart;
+    }
+
+    // Check if there's time left after the last event
+    console.log('[DEBUG] After events check:', {
+      date: dateStr,
+      currentSlotStart: currentSlotStart.toISOString(),
+      dayEnd: dayEnd.toISOString(),
+      hasTimeLeft: currentSlotStart < dayEnd
+    });
+    if (currentSlotStart < dayEnd) {
+      let slotStart = new Date(currentSlotStart);
+      while (slotStart.getTime() + slotDurationMinutes * 60 * 1000 <= dayEnd.getTime()) {
+        const slotEnd = new Date(slotStart.getTime() + slotDurationMinutes * 60 * 1000);
+        console.log('[DEBUG] Adding slot:', {
+          date: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+          start: slotStart.toISOString(),
+          end: slotEnd.toISOString()
+        });
+        availableSlots.push({
+          start: new Date(slotStart),
+          end: new Date(slotEnd),
+        });
+        slotStart = new Date(slotEnd);
+      }
     }
 
     // Move to next day
-    currentDate.setDate(currentDate.getDate() + 1);
+    currentDay++;
+    // Handle month/year rollover
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    if (currentDay > daysInMonth) {
+      currentDay = 1;
+      currentMonth++;
+      if (currentMonth > 11) {
+        currentMonth = 0;
+        currentYear++;
+      }
+    }
   }
 
-  // Merge consecutive slots if requested
+  console.log('[DEBUG] Total slots generated:', availableSlots.length);
+  const slotsByDate = availableSlots.reduce((acc, slot) => {
+    const date = slot.start.toISOString().split('T')[0];
+    acc[date] = (acc[date] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  console.log('[DEBUG] Slots by date:', slotsByDate);
+
+  // Merge slots if requested
   if (mergeSlots) {
-    return mergeConsecutiveSlots(availableSlots);
+    const merged = mergeConsecutiveSlots(availableSlots);
+    console.log('[DEBUG] After merge:', merged.length, 'slots');
+    return {
+      slots: merged,
+      debug: {
+        startDateNum,
+        endDateNum,
+        slotsByDate,
+        processedDates
+      }
+    };
   }
 
-  return availableSlots;
+  return {
+    slots: availableSlots,
+    debug: {
+      startDateNum,
+      endDateNum,
+      slotsByDate,
+      processedDates
+    }
+  };
 }
 
 /**
