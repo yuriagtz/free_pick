@@ -123,26 +123,17 @@ export default function AvailabilityChecker() {
     }
   };
 
+  // Auto-redirect to login if not authenticated
+  useEffect(() => {
+    if (!isAuthenticated) {
+      window.location.href = getLoginUrl();
+    }
+  }, [isAuthenticated]);
+
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>ログインが必要です</CardTitle>
-            <CardDescription>
-              空き時間を確認するにはログインしてください
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              onClick={() => window.location.href = getLoginUrl()}
-              className="w-full"
-            >
-              <LogIn className="mr-2 h-4 w-4" />
-              ログイン
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     );
   }

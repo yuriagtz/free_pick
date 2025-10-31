@@ -33,3 +33,6 @@
 
 ## バグ修正（追加3）
 - [x] env.tsにGoogle関連の環境変数（googleClientId, googleClientSecret, baseUrl）を追加
+
+## 新機能追加（追加）
+- [x] 自動ログイン機能の実装（初回アクセス時に自動的にゲストユーザーとしてログイン）
