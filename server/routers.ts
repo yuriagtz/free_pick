@@ -118,8 +118,11 @@ export const appRouter = router({
           }
         }
 
-        const startDate = new Date(input.startDate);
-        const endDate = new Date(input.endDate);
+        // Parse dates as YYYY-MM-DD in JST timezone
+        const [startYear, startMonth, startDay] = input.startDate.split('-').map(Number);
+        const [endYear, endMonth, endDay] = input.endDate.split('-').map(Number);
+        const startDate = new Date(startYear, startMonth - 1, startDay);
+        const endDate = new Date(endYear, endMonth - 1, endDay);
 
         let events = [];
         let apiError = null;
