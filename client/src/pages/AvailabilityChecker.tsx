@@ -562,6 +562,22 @@ export default function AvailabilityChecker() {
             )}
           </div>
         )}
+
+        {/* Footer with Privacy Policy link */}
+        <footer className="mt-12 text-center text-sm text-gray-600">
+          <p>
+            <a
+              href="/privacy-policy"
+              onClick={(e) => {
+                e.preventDefault();
+                window.location.href = "/privacy-policy";
+              }}
+              className="hover:text-gray-900 underline"
+            >
+              プライバシーポリシー
+            </a>
+          </p>
+        </footer>
       </div>
     </div>
   );
