@@ -16,8 +16,10 @@ export const appRouter = router({
   system: systemRouter,
 
   calendar: router({
-    getAuthUrl: publicProcedure.query(() => {
-      return { url: getAuthUrl() };
+    getAuthUrl: publicProcedure.query(({ ctx }) => {
+      // Use the same route as the direct link - /api/auth/google
+      const baseUrl = process.env.BASE_URL || ctx.req.headers.origin || 'http://localhost:3000';
+      return { url: `${baseUrl}/api/auth/google` };
     }),
 
     getConnectionStatus: publicProcedure.query(async ({ ctx }) => {

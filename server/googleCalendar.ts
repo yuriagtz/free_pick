@@ -4,7 +4,7 @@ import { ENV } from './_core/env';
 const oauth2Client = new google.auth.OAuth2(
   ENV.googleClientId,
   ENV.googleClientSecret,
-  `${ENV.baseUrl}/api/google/callback`
+  `${ENV.baseUrl || 'http://localhost:3000'}/api/auth/google/callback`
 );
 
 /**
