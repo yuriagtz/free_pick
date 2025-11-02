@@ -81,29 +81,37 @@ export default function AvailabilityChecker() {
       // Clear query params first
       window.history.replaceState({}, document.title, window.location.pathname);
       
-      // Multiple retries to ensure cookie is set and status is updated
-      const retryCheck = async (attempt: number = 0) => {
-        if (attempt >= 5) {
-          console.warn("Failed to detect connection status after multiple retries");
-          return;
-        }
-        
-        // Invalidate the query cache to force a fresh fetch
-        await utils.calendar.getConnectionStatus.invalidate();
-        // Refetch the connection status
-        const result = await refetchStatus();
-        
-        // Check if connected, if not retry after delay
-        if (!result.data?.connected && attempt < 4) {
-          setTimeout(() => retryCheck(attempt + 1), 300);
-        } else if (result.data?.connected) {
-          // Connection confirmed, invalidate calendar list
-          await utils.calendar.getCalendarList.invalidate();
+      // Force immediate refetch and then retry if needed
+      const checkConnection = async () => {
+        try {
+          // Invalidate all related queries
+          await Promise.all([
+            utils.calendar.getConnectionStatus.invalidate(),
+            utils.calendar.getCalendarList.invalidate(),
+          ]);
+          
+          // Refetch connection status
+          const result = await refetchStatus();
+          console.log("[Client] Connection status after OAuth:", result.data);
+          
+          if (result.data?.connected) {
+            // Connection confirmed, force calendar list to refetch
+            await utils.calendar.getCalendarList.invalidate();
+          } else {
+            // Retry after a longer delay
+            setTimeout(async () => {
+              await utils.calendar.getConnectionStatus.invalidate();
+              await refetchStatus();
+            }, 1500);
+          }
+        } catch (error) {
+          console.error("[Client] Error checking connection:", error);
         }
       };
       
-      // Start checking after initial delay
-      setTimeout(() => retryCheck(), 800);
+      // Start checking immediately and also after delay
+      checkConnection();
+      setTimeout(checkConnection, 1000);
     } else if (error) {
       toast.error(`連携に失敗しました: ${error}`);
       window.history.replaceState({}, document.title, window.location.pathname);

@@ -140,14 +140,19 @@ class GoogleTokenCookie {
       console.log("[Google Token] isConnected: No tokens found");
       return false;
     }
+    // If tokens exist (even if expired), we consider it connected
+    // The token will be refreshed when needed
     const now = Date.now();
-    const isValid = tokens.expiryDate > now - 5 * 60 * 1000;
-    console.log("[Google Token] isConnected:", isValid, {
+    const isExpired = tokens.expiryDate < now;
+    console.log("[Google Token] isConnected: true (tokens exist)", {
+      hasAccessToken: !!tokens.accessToken,
+      hasRefreshToken: !!tokens.refreshToken,
       expiryDate: new Date(tokens.expiryDate).toISOString(),
       now: new Date(now).toISOString(),
+      isExpired,
       timeUntilExpiry: tokens.expiryDate - now,
     });
-    return isValid;
+    return true; // Tokens exist = connected (refresh token can be used to get new access token)
   }
 }
 
