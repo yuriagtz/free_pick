@@ -30,12 +30,22 @@ function isSecureRequest(req: Request) {
 }
 
 function getSessionCookieOptions(req: Request) {
-  return {
+  const isSecure = isSecureRequest(req);
+  // For Vercel/production, always use secure cookies with sameSite: "none"
+  // This allows cross-origin requests
+  const options = {
     httpOnly: true,
     path: "/",
-    sameSite: "none" as const,
-    secure: isSecureRequest(req),
+    sameSite: (isSecure ? "none" : "lax") as "none" | "lax",
+    secure: isSecure,
+    // Don't set domain - let browser handle it automatically
   };
+  console.log("[Cookie Options] Generated:", options, {
+    protocol: req.protocol,
+    "x-forwarded-proto": req.headers["x-forwarded-proto"],
+    isSecure,
+  });
+  return options;
 }
 
 // ==================== Google Token Cookie Management ====================
