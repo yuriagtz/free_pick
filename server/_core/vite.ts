@@ -40,8 +40,8 @@ export async function setupVite(app: Express, server: Server) {
       );
       
       // Replace environment variables in HTML
-      const appLogo = process.env.VITE_APP_LOGO || "https://placehold.co/128x128/E1E7EF/1F2937?text=App";
-      const appTitle = process.env.VITE_APP_TITLE || "App";
+      const appLogo = process.env.VITE_APP_LOGO || "/favicon.ico";
+      const appTitle = process.env.VITE_APP_TITLE || "FreePick";
       const analyticsEndpoint = process.env.VITE_ANALYTICS_ENDPOINT || "";
       const analyticsWebsiteId = process.env.VITE_ANALYTICS_WEBSITE_ID || "";
       
