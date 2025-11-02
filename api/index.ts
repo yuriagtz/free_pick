@@ -301,6 +301,7 @@ app.get("/api/google/callback", async (req: Request, res: Response) => {
     }
 
     if (tokens.access_token && tokens.refresh_token && tokens.expiry_date) {
+      console.log("[Google Auth Callback] Saving tokens to cookie...");
       await googleTokenCookie.saveTokens(res, req, {
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token,
@@ -308,10 +309,25 @@ app.get("/api/google/callback", async (req: Request, res: Response) => {
         scope: "calendar",
       });
       console.log("[Google Auth Callback] Tokens saved to cookie successfully");
+      
+      // Verify cookie was set by checking response headers
+      const setCookieHeader = res.getHeader("Set-Cookie");
+      console.log("[Google Auth Callback] Set-Cookie header:", setCookieHeader);
+      
+      // Also verify immediately by reading the cookie back
+      const savedTokens = await googleTokenCookie.getTokens(req);
+      console.log("[Google Auth Callback] Verification - tokens readable:", !!savedTokens);
+    } else {
+      console.error("[Google Auth Callback] Missing tokens:", {
+        hasAccessToken: !!tokens.access_token,
+        hasRefreshToken: !!tokens.refresh_token,
+        hasExpiryDate: !!tokens.expiry_date,
+      });
     }
 
     console.log("[Google Auth Callback] Redirecting to /?google_connected=true");
-    res.redirect(302, "/?google_connected=true");
+    // Use 303 See Other instead of 302 to ensure cookie is sent
+    res.redirect(303, "/?google_connected=true");
   } catch (error) {
     console.error("[Google Auth] Callback failed:", error);
     res.status(500).json({ error: "Authentication failed" });
