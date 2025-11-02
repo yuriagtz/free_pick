@@ -407,6 +407,49 @@ const appRouter = router({
       googleTokenCookie.clearTokens(ctx.res, ctx.req);
       return { success: true };
     }),
+
+    getCalendarList: publicProcedure.query(async ({ ctx }) => {
+      const tokens = await googleTokenCookie.getTokens(ctx.req);
+
+      if (!tokens) {
+        throw new Error("Google Calendar not connected");
+      }
+
+      try {
+        console.log("[tRPC getCalendarList] Fetching calendars...");
+        
+        // Create OAuth2 client
+        const baseUrl = getBaseUrl(ctx.req);
+        const redirectUri = `${baseUrl}/api/google/callback`;
+        const oauth2Client = createOAuth2Client(redirectUri);
+        
+        // Set credentials
+        oauth2Client.setCredentials({
+          access_token: tokens.accessToken,
+          refresh_token: tokens.refreshToken,
+          expiry_date: tokens.expiryDate,
+        });
+
+        // Create Calendar client
+        const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+        
+        // Fetch calendar list
+        const response = await calendar.calendarList.list();
+        
+        const calendars = (response.data.items || []).map((cal) => ({
+          id: cal.id || "",
+          summary: cal.summary || cal.id || "",
+          primary: cal.primary || false,
+          backgroundColor: cal.backgroundColor,
+        }));
+
+        console.log("[tRPC getCalendarList] Found", calendars.length, "calendars");
+        return { calendars };
+      } catch (error: any) {
+        console.error("[tRPC getCalendarList] Error:", error);
+        throw new Error(`Failed to fetch calendar list: ${error.message}`);
+      }
+    }),
   }),
 });
 
