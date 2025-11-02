@@ -2,10 +2,10 @@
 import "dotenv/config";
 import express from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerGoogleAuthRoutes } from "../server/_core/googleAuth";
-import { registerGoogleOAuthRoutes } from "../server/googleOAuthRoutes";
-import { appRouter } from "../server/routers";
-import { createContext } from "../server/_core/context";
+import { registerGoogleAuthRoutes } from "../server/_core/googleAuth.js";
+import { registerGoogleOAuthRoutes } from "../server/googleOAuthRoutes.js";
+import { appRouter } from "../server/routers.js";
+import { createContext } from "../server/_core/context.js";
 
 const app = express();
 
