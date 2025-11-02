@@ -450,6 +450,312 @@ const appRouter = router({
         throw new Error(`Failed to fetch calendar list: ${error.message}`);
       }
     }),
+
+    getAvailableSlots: publicProcedure
+      .input(
+        z.object({
+          startDate: z.string(),
+          endDate: z.string(),
+          workingHoursStart: z.number().min(0).max(23),
+          workingHoursEnd: z.number().min(0).max(23),
+          slotDurationMinutes: z.number().min(15).max(240),
+          calendarIds: z.array(z.string()).optional(),
+          bufferBeforeMinutes: z.number().min(0).max(120).optional(),
+          bufferAfterMinutes: z.number().min(0).max(120).optional(),
+          mergeSlots: z.boolean().optional(),
+          excludedDays: z.array(z.number().min(0).max(6)).optional(),
+          ignoreAllDayEvents: z.boolean().optional(),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const tokens = await googleTokenCookie.getTokens(ctx.req);
+
+        if (!tokens) {
+          throw new Error("Google Calendar not connected");
+        }
+
+        try {
+          console.log("[tRPC getAvailableSlots] Starting...", { input });
+          
+          // Create OAuth2 client
+          const baseUrl = getBaseUrl(ctx.req);
+          const redirectUri = `${baseUrl}/api/google/callback`;
+          const oauth2Client = createOAuth2Client(redirectUri);
+          
+          // Set credentials
+          oauth2Client.setCredentials({
+            access_token: tokens.accessToken,
+            refresh_token: tokens.refreshToken,
+            expiry_date: tokens.expiryDate,
+          });
+
+          // Create Calendar client
+          const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+
+          // Parse dates
+          const startDateStr = input.startDate;
+          const endDateStr = input.endDate;
+          const [startYear, startMonth, startDay] = startDateStr.split("-").map(Number);
+          const [endYear, endMonth, endDay] = endDateStr.split("-").map(Number);
+          const startDate = new Date(startYear, startMonth - 1, startDay);
+          const endDate = new Date(endYear, endMonth - 1, endDay + 1);
+
+          // Set time to start and end of day in UTC
+          const timeMinUTC = new Date(startDate);
+          timeMinUTC.setUTCHours(0, 0, 0, 0);
+          const timeMaxUTC = new Date(endDate);
+          timeMaxUTC.setUTCHours(23, 59, 59, 999);
+
+          // Fetch events from all selected calendars
+          const calendarIds = input.calendarIds || ["primary"];
+          const allEvents: any[] = [];
+          
+          for (const calendarId of calendarIds) {
+            try {
+              const response = await calendar.events.list({
+                calendarId,
+                timeMin: timeMinUTC.toISOString(),
+                timeMax: timeMaxUTC.toISOString(),
+                singleEvents: true,
+                orderBy: "startTime",
+              });
+              allEvents.push(...(response.data.items || []));
+            } catch (error) {
+              console.error(`[tRPC getAvailableSlots] Error fetching events from calendar ${calendarId}:`, error);
+            }
+          }
+
+          console.log("[tRPC getAvailableSlots] Found", allEvents.length, "events");
+
+          // Calculate available slots (simplified implementation)
+          const availableSlots: Array<{ start: Date; end: Date }> = [];
+
+          function createJSTDate(year: number, month: number, day: number, hour: number, minute: number = 0): Date {
+            return new Date(Date.UTC(year, month, day, hour - 9, minute, 0, 0));
+          }
+
+          function parseEventTime(dateTimeStr: string | undefined, dateStr: string | undefined): Date | null {
+            if (dateTimeStr) {
+              return new Date(dateTimeStr);
+            } else if (dateStr) {
+              const [y, m, d] = dateStr.split("-").map(Number);
+              return createJSTDate(y, m - 1, d, 0, 0);
+            }
+            return null;
+          }
+
+          const [sYear, sMonth0, sDay] = startDateStr.split("-").map(Number);
+          const [eYear, eMonth0, eDay] = endDateStr.split("-").map(Number);
+          const sMonth = sMonth0 - 1;
+          const eMonth = eMonth0 - 1;
+          const startDateNum = sYear * 10000 + (sMonth + 1) * 100 + sDay;
+          const endDateNum = eYear * 10000 + (eMonth + 1) * 100 + eDay;
+
+          let currentYear = sYear;
+          let currentMonth = sMonth;
+          let currentDay = sDay;
+          const processedDates: string[] = [];
+
+          while (true) {
+            const currentDateNum = currentYear * 10000 + (currentMonth + 1) * 100 + currentDay;
+            if (currentDateNum > endDateNum) break;
+
+            const year = currentYear;
+            const month = currentMonth;
+            const day = currentDay;
+            const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+            processedDates.push(dateStr);
+
+            const tempDate = new Date(year, month, day);
+            const dayOfWeek = tempDate.getDay();
+
+            if ((input.excludedDays || []).includes(dayOfWeek)) {
+              currentDay++;
+              const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+              if (currentDay > daysInMonth) {
+                currentDay = 1;
+                currentMonth++;
+                if (currentMonth > 11) {
+                  currentMonth = 0;
+                  currentYear++;
+                }
+              }
+              continue;
+            }
+
+            const dayStart = createJSTDate(year, month, day, input.workingHoursStart);
+            const dayEnd = createJSTDate(year, month, day, input.workingHoursEnd);
+
+            const dayEvents = allEvents.filter((event) => {
+              const summary = event.summary || "";
+              const isAllDayEvent = !!event.start?.date;
+              if (isAllDayEvent && (summary.includes("誕生日") || summary.toLowerCase().includes("birthday"))) {
+                return false;
+              }
+              if ((input.ignoreAllDayEvents ?? true) && isAllDayEvent) {
+                return false;
+              }
+              const eventStart = parseEventTime(event.start?.dateTime, event.start?.date);
+              const eventEnd = parseEventTime(event.end?.dateTime, event.end?.date);
+              if (!eventStart || !eventEnd) return false;
+              return eventStart < dayEnd && eventEnd > dayStart;
+            });
+
+            dayEvents.sort((a, b) => {
+              const aStart = parseEventTime(a.start?.dateTime, a.start?.date);
+              const bStart = parseEventTime(b.start?.dateTime, b.start?.date);
+              if (!aStart || !bStart) return 0;
+              return aStart.getTime() - bStart.getTime();
+            });
+
+            let currentSlotStart = new Date(dayStart);
+
+            for (const event of dayEvents) {
+              const eventStart = parseEventTime(event.start?.dateTime, event.start?.date);
+              const eventEnd = parseEventTime(event.end?.dateTime, event.end?.date);
+              if (!eventStart || !eventEnd) continue;
+
+              let adjustedEventStart = new Date(eventStart.getTime() - (input.bufferBeforeMinutes || 0) * 60 * 1000);
+              let adjustedEventEnd = new Date(eventEnd.getTime() + (input.bufferAfterMinutes || 0) * 60 * 1000);
+              adjustedEventStart = adjustedEventStart < dayStart ? dayStart : adjustedEventStart;
+              adjustedEventEnd = adjustedEventEnd > dayEnd ? dayEnd : adjustedEventEnd;
+
+              if (currentSlotStart < adjustedEventStart) {
+                if (input.mergeSlots) {
+                  availableSlots.push({
+                    start: new Date(currentSlotStart),
+                    end: new Date(adjustedEventStart),
+                  });
+                } else {
+                  let slotStart = new Date(currentSlotStart);
+                  while (slotStart.getTime() + input.slotDurationMinutes * 60 * 1000 <= adjustedEventStart.getTime()) {
+                    const slotEnd = new Date(slotStart.getTime() + input.slotDurationMinutes * 60 * 1000);
+                    availableSlots.push({
+                      start: new Date(slotStart),
+                      end: new Date(slotEnd),
+                    });
+                    slotStart = new Date(slotEnd);
+                  }
+                }
+              }
+
+              currentSlotStart = adjustedEventEnd > currentSlotStart ? new Date(adjustedEventEnd) : currentSlotStart;
+            }
+
+            if (currentSlotStart < dayEnd) {
+              if (input.mergeSlots) {
+                availableSlots.push({
+                  start: new Date(currentSlotStart),
+                  end: new Date(dayEnd),
+                });
+              } else {
+                let slotStart = new Date(currentSlotStart);
+                while (slotStart.getTime() + input.slotDurationMinutes * 60 * 1000 <= dayEnd.getTime()) {
+                  const slotEnd = new Date(slotStart.getTime() + input.slotDurationMinutes * 60 * 1000);
+                  availableSlots.push({
+                    start: new Date(slotStart),
+                    end: new Date(slotEnd),
+                  });
+                  slotStart = new Date(slotEnd);
+                }
+              }
+            }
+
+            currentDay++;
+            const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+            if (currentDay > daysInMonth) {
+              currentDay = 1;
+              currentMonth++;
+              if (currentMonth > 11) {
+                currentMonth = 0;
+                currentYear++;
+              }
+            }
+          }
+
+          // Format slots as text
+          let formattedText = "";
+          if (availableSlots.length === 0) {
+            formattedText = "指定期間に空き時間が見つかりませんでした。";
+          } else {
+            const slotsByDate = new Map<string, Array<{ start: Date; end: Date }>>();
+            for (const slot of availableSlots) {
+              const dateKey = slot.start.toLocaleDateString("ja-JP", {
+                timeZone: "Asia/Tokyo",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                weekday: "short",
+              });
+              if (!slotsByDate.has(dateKey)) {
+                slotsByDate.set(dateKey, []);
+              }
+              slotsByDate.get(dateKey)!.push(slot);
+            }
+
+            for (const [dateKey, dateSlots] of slotsByDate) {
+              formattedText += `■ ${dateKey}\n`;
+              for (const slot of dateSlots) {
+                const startTime = slot.start.toLocaleTimeString("ja-JP", {
+                  timeZone: "Asia/Tokyo",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: false,
+                });
+                const endTime = slot.end.toLocaleTimeString("ja-JP", {
+                  timeZone: "Asia/Tokyo",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: false,
+                });
+                formattedText += `  ${startTime} - ${endTime}\n`;
+              }
+              formattedText += "\n";
+            }
+            formattedText = formattedText.trim();
+          }
+
+          const slotsByDate: Record<string, number> = {};
+          availableSlots.forEach((slot) => {
+            const date = new Date(slot.start).toLocaleDateString("ja-JP", {
+              timeZone: "Asia/Tokyo",
+            });
+            slotsByDate[date] = (slotsByDate[date] || 0) + 1;
+          });
+
+          console.log("[tRPC getAvailableSlots] Found", availableSlots.length, "slots");
+
+          return {
+            slots: availableSlots,
+            formattedText,
+            totalSlots: availableSlots.length,
+            debug: {
+              inputStartDate: input.startDate,
+              inputEndDate: input.endDate,
+              parsedStartDate: startDate.toISOString(),
+              parsedEndDate: endDate.toISOString(),
+              totalEvents: allEvents.length,
+              startDateComponents: {
+                year: startDate.getFullYear(),
+                month: startDate.getMonth(),
+                day: startDate.getDate(),
+              },
+              endDateComponents: {
+                year: endDate.getFullYear(),
+                month: endDate.getMonth(),
+                day: endDate.getDate(),
+              },
+              startDateNum,
+              endDateNum,
+              processedDates,
+              slotsByDate,
+            },
+          };
+        } catch (error: any) {
+          console.error("[tRPC getAvailableSlots] Error:", error);
+          throw new Error(`Failed to fetch available slots: ${error.message}`);
+        }
+      }),
   }),
 });
 
