@@ -26,10 +26,11 @@ export default function AvailabilityChecker() {
   const { data: connectionStatus, isLoading: statusLoading, refetch: refetchStatus } = 
     trpc.calendar.getConnectionStatus.useQuery();
 
-  const { data: authUrl, error: authUrlError } = trpc.calendar.getAuthUrl.useQuery(undefined, {
-    enabled: !connectionStatus?.connected,
-    retry: false,
-  });
+  // Don't need to fetch authUrl - we can use direct link
+  // const { data: authUrl, error: authUrlError } = trpc.calendar.getAuthUrl.useQuery(undefined, {
+  //   enabled: !connectionStatus?.connected,
+  //   retry: false,
+  // });
 
   const { data: calendarListData, isLoading: calendarsLoading } = 
     trpc.calendar.getCalendarList.useQuery(undefined, {
@@ -175,21 +176,11 @@ export default function AvailabilityChecker() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {authUrlError && (
-                <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3">
-                  ⚠️ 認証URLの取得に失敗しました。環境変数（GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, BASE_URL）が設定されているか確認してください。
-                </div>
-              )}
               <Button
                 onClick={() => {
-                  if (authUrl?.url) {
-                    window.location.href = authUrl.url;
-                  } else {
-                    // Fallback: 直接リダイレクト
-                    window.location.href = '/api/auth/google';
-                  }
+                  // Direct link to Google OAuth - no need to fetch via tRPC
+                  window.location.href = '/api/auth/google';
                 }}
-                disabled={false}
                 className="w-full"
               >
                 <Calendar className="mr-2 h-4 w-4" />

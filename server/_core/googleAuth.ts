@@ -17,6 +17,14 @@ export function registerGoogleAuthRoutes(app: Express) {
   // Start Google OAuth flow
   app.get("/api/auth/google", async (req: Request, res: Response) => {
     try {
+      // Validate environment variables
+      if (!ENV.googleClientId || !ENV.googleClientSecret) {
+        console.error("[Google Auth] Missing required environment variables");
+        return res.status(500).json({ 
+          error: "Google OAuth is not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables." 
+        });
+      }
+
       const scopes = [
         "https://www.googleapis.com/auth/userinfo.email",
         "https://www.googleapis.com/auth/userinfo.profile",
@@ -33,7 +41,10 @@ export function registerGoogleAuthRoutes(app: Express) {
       res.redirect(302, authUrl);
     } catch (error) {
       console.error("[Google Auth] Failed to generate auth URL:", error);
-      res.status(500).json({ error: "Failed to start authentication" });
+      res.status(500).json({ 
+        error: "Failed to start authentication",
+        details: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 

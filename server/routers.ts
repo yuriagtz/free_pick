@@ -17,9 +17,18 @@ export const appRouter = router({
 
   calendar: router({
     getAuthUrl: publicProcedure.query(({ ctx }) => {
-      // Use the same route as the direct link - /api/auth/google
-      const baseUrl = process.env.BASE_URL || ctx.req.headers.origin || 'http://localhost:3000';
-      return { url: `${baseUrl}/api/auth/google` };
+      try {
+        // Use the same route as the direct link - /api/auth/google
+        const baseUrl = process.env.BASE_URL || 
+                       (typeof ctx.req.headers.origin === 'string' ? ctx.req.headers.origin : null) ||
+                       (typeof ctx.req.headers.host === 'string' ? `${ctx.req.headers['x-forwarded-proto'] || 'https'}://${ctx.req.headers.host}` : null) ||
+                       'http://localhost:3000';
+        return { url: `${baseUrl}/api/auth/google` };
+      } catch (error) {
+        console.error('[getAuthUrl] Error:', error);
+        // Fallback to relative URL
+        return { url: '/api/auth/google' };
+      }
     }),
 
     getConnectionStatus: publicProcedure.query(async ({ ctx }) => {
