@@ -1,8 +1,20 @@
 {
+  "version": 2,
   "buildCommand": "pnpm install --no-frozen-lockfile && pnpm run build",
   "installCommand": "pnpm install --no-frozen-lockfile",
   "framework": null,
   "outputDirectory": "dist/public",
-  "devCommand": "pnpm run dev"
+  "devCommand": "pnpm run dev",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index"
+    }
+  ],
+  "functions": {
+    "api/index.ts": {
+      "runtime": "nodejs20.x"
+    }
+  }
 }
 
