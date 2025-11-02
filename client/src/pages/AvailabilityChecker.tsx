@@ -23,8 +23,12 @@ export default function AvailabilityChecker() {
   const [excludedDays, setExcludedDays] = useState<number[]>([]);
   const [ignoreAllDayEvents, setIgnoreAllDayEvents] = useState(false);
 
+  const utils = trpc.useUtils();
   const { data: connectionStatus, isLoading: statusLoading, refetch: refetchStatus } = 
-    trpc.calendar.getConnectionStatus.useQuery();
+    trpc.calendar.getConnectionStatus.useQuery(undefined, {
+      refetchOnMount: true,
+      refetchOnWindowFocus: true,
+    });
 
   // Don't need to fetch authUrl - we can use direct link
   // const { data: authUrl, error: authUrlError } = trpc.calendar.getAuthUrl.useQuery(undefined, {
@@ -74,13 +78,22 @@ export default function AvailabilityChecker() {
 
     if (googleConnected === "true") {
       toast.success("Googleカレンダーと連携しました");
-      refetchStatus();
+      // Clear query params first
       window.history.replaceState({}, document.title, window.location.pathname);
+      // Invalidate and refetch connection status after a short delay to ensure cookie is set
+      setTimeout(async () => {
+        // Invalidate the query cache to force a fresh fetch
+        await utils.calendar.getConnectionStatus.invalidate();
+        // Refetch the connection status
+        await refetchStatus();
+        // Invalidate calendar list query so it will refetch when connectionStatus becomes true
+        await utils.calendar.getCalendarList.invalidate();
+      }, 500);
     } else if (error) {
       toast.error(`連携に失敗しました: ${error}`);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
-  }, []);
+  }, [refetchStatus, utils]);
 
   useEffect(() => {
     const today = new Date();
