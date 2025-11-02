@@ -1,18 +1,16 @@
-import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { Calendar, Check, Copy, Loader2, LogIn, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 export default function AvailabilityChecker() {
-  const { user, isAuthenticated } = useAuth();
+  // No authentication needed - Google tokens are in cookies
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [workingHoursStart, setWorkingHoursStart] = useState(9);
@@ -26,17 +24,15 @@ export default function AvailabilityChecker() {
   const [ignoreAllDayEvents, setIgnoreAllDayEvents] = useState(false);
 
   const { data: connectionStatus, isLoading: statusLoading, refetch: refetchStatus } = 
-    trpc.calendar.getConnectionStatus.useQuery(undefined, {
-      enabled: isAuthenticated,
-    });
+    trpc.calendar.getConnectionStatus.useQuery();
 
   const { data: authUrl } = trpc.calendar.getAuthUrl.useQuery(undefined, {
-    enabled: isAuthenticated && !connectionStatus?.connected,
+    enabled: !connectionStatus?.connected,
   });
 
   const { data: calendarListData, isLoading: calendarsLoading } = 
     trpc.calendar.getCalendarList.useQuery(undefined, {
-      enabled: isAuthenticated && connectionStatus?.connected,
+      enabled: connectionStatus?.connected,
     });
 
   const disconnectMutation = trpc.calendar.disconnect.useMutation({
@@ -148,22 +144,7 @@ export default function AvailabilityChecker() {
     }
   };
 
-  // Auto-redirect to login if not authenticated (only on initial load)
-  useEffect(() => {
-    const hasRedirected = sessionStorage.getItem('login_redirect');
-    if (!isAuthenticated && !hasRedirected) {
-      sessionStorage.setItem('login_redirect', 'true');
-      window.location.href = getLoginUrl();
-    }
-  }, []);
-
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-      </div>
-    );
-  }
+  // No authentication check needed
 
   if (statusLoading) {
     return (

@@ -1,84 +1,77 @@
-import { COOKIE_NAME } from "@shared/const";
-import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { publicProcedure, router } from "./_core/trpc";
 import { z } from "zod";
-import { getAuthUrl, getTokensFromCode, getCalendarEvents, getCalendarList, calculateAvailableSlots, formatSlotsAsText } from "./googleCalendar";
-import { upsertGoogleToken, getGoogleTokenByUserId, deleteGoogleTokenByUserId } from "./db";
+import {
+  getAuthUrl,
+  getTokensFromCode,
+  getCalendarEvents,
+  getCalendarList,
+  calculateAvailableSlots,
+  formatSlotsAsText,
+} from "./googleCalendar";
+import { googleTokenCookie } from "./_core/googleTokenCookie";
 
 export const appRouter = router({
-    // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
+  // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
-  auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
-    logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return {
-        success: true,
-      } as const;
-    }),
-  }),
 
   calendar: router({
-    getAuthUrl: protectedProcedure.query(() => {
+    getAuthUrl: publicProcedure.query(() => {
       return { url: getAuthUrl() };
     }),
 
-    getConnectionStatus: protectedProcedure.query(async ({ ctx }) => {
-      const token = await getGoogleTokenByUserId(ctx.user.id);
-      return { connected: !!token };
+    getConnectionStatus: publicProcedure.query(async ({ ctx }) => {
+      const connected = await googleTokenCookie.isConnected(ctx.req);
+      return { connected };
     }),
 
-    handleCallback: protectedProcedure
+    handleCallback: publicProcedure
       .input(z.object({ code: z.string() }))
       .mutation(async ({ ctx, input }) => {
         const tokens = await getTokensFromCode(input.code);
 
         if (!tokens.access_token || !tokens.refresh_token || !tokens.expiry_date) {
-          throw new Error('Failed to get tokens from Google');
+          throw new Error("Failed to get tokens from Google");
         }
 
-        await upsertGoogleToken({
-          userId: ctx.user.id,
+        // Save tokens to cookie (no DB needed)
+        await googleTokenCookie.saveTokens(ctx.res, ctx.req, {
           accessToken: tokens.access_token,
           refreshToken: tokens.refresh_token,
-          expiryDate: new Date(tokens.expiry_date),
-          scope: tokens.scope || '',
+          expiryDate: tokens.expiry_date,
+          scope: tokens.scope || "",
         });
 
         return { success: true };
       }),
 
-    disconnect: protectedProcedure.mutation(async ({ ctx }) => {
-      await deleteGoogleTokenByUserId(ctx.user.id);
+    disconnect: publicProcedure.mutation(async ({ ctx }) => {
+      googleTokenCookie.clearTokens(ctx.res, ctx.req);
       return { success: true };
     }),
 
-    getCalendarList: protectedProcedure.query(async ({ ctx }) => {
-      const token = await getGoogleTokenByUserId(ctx.user.id);
-      if (!token) {
-        throw new Error('Google Calendar not connected');
-      }
+    getCalendarList: publicProcedure.query(async ({ ctx }) => {
+      const tokens = await googleTokenCookie.getTokens(ctx.req);
 
-      const accessToken = token.accessToken;
-      const expiryDate = token.expiryDate.getTime();
+      if (!tokens) {
+        throw new Error("Google Calendar not connected");
+      }
 
       try {
         const calendars = await getCalendarList(
-          accessToken,
-          token.refreshToken,
-          expiryDate
+          tokens.accessToken,
+          tokens.refreshToken,
+          tokens.expiryDate
         );
 
         return { calendars };
       } catch (error: any) {
-        console.error('Error fetching calendar list:', error);
+        console.error("Error fetching calendar list:", error);
         throw new Error(`Failed to fetch calendar list: ${error.message}`);
       }
     }),
 
-    getAvailableSlots: protectedProcedure
+    getAvailableSlots: publicProcedure
       .input(
         z.object({
           startDate: z.string(),
@@ -95,47 +88,38 @@ export const appRouter = router({
         })
       )
       .query(async ({ ctx, input }) => {
-        const token = await getGoogleTokenByUserId(ctx.user.id);
+        const tokens = await googleTokenCookie.getTokens(ctx.req);
 
-        if (!token) {
-          throw new Error('Google Calendar not connected');
+        if (!tokens) {
+          throw new Error("Google Calendar not connected");
         }
 
-        let accessToken = token.accessToken;
-        let expiryDate = token.expiryDate.getTime();
-
-        // Token refresh is handled automatically by the Google Calendar API client
-
         // Pass date strings directly to avoid timezone issues
-        // calculateAvailableSlots will parse them correctly
         const startDateStr = input.startDate; // YYYY-MM-DD
         const endDateStr = input.endDate; // YYYY-MM-DD
-        
-        // Create Date objects for API calls (need full Date objects for Google Calendar API)
-        // For Google Calendar API, we need to fetch events up to the end of the end date
-        const [startYear, startMonth, startDay] = startDateStr.split('-').map(Number);
-        const [endYear, endMonth, endDay] = endDateStr.split('-').map(Number);
+
+        // Create Date objects for API calls
+        const [startYear, startMonth, startDay] = startDateStr.split("-").map(Number);
+        const [endYear, endMonth, endDay] = endDateStr.split("-").map(Number);
         const startDate = new Date(startYear, startMonth - 1, startDay);
-        // Add 1 day to endDate to include the entire end date
         const endDate = new Date(endYear, endMonth - 1, endDay + 1);
 
         let events = [];
-        let apiError = null;
-        
-        const calendarIds = input.calendarIds || ['primary'];
-        console.log('[DEBUG] Calendar IDs:', calendarIds);
-        
+
+        const calendarIds = input.calendarIds || ["primary"];
+        console.log("[DEBUG] Calendar IDs:", calendarIds);
+
         try {
           events = await getCalendarEvents(
-            accessToken,
-            token.refreshToken,
-            expiryDate,
+            tokens.accessToken,
+            tokens.refreshToken,
+            tokens.expiryDate,
             startDate,
             endDate,
             calendarIds
           );
         } catch (error: any) {
-          console.error('Error fetching calendar events:', error);
+          console.error("Error fetching calendar events:", error);
           throw error;
         }
 
@@ -150,17 +134,19 @@ export const appRouter = router({
           input.bufferAfterMinutes || 0,
           input.excludedDays || [],
           input.mergeSlots || false,
-          input.ignoreAllDayEvents ?? false // Default to false (birthdays are always ignored)
+          input.ignoreAllDayEvents ?? false
         );
-        
+
         const availableSlots = result.slots;
 
         const formattedText = formatSlotsAsText(availableSlots);
 
         // Count slots by date
         const slotsByDate: Record<string, number> = {};
-        availableSlots.forEach(slot => {
-          const date = new Date(slot.start).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' });
+        availableSlots.forEach((slot) => {
+          const date = new Date(slot.start).toLocaleDateString("ja-JP", {
+            timeZone: "Asia/Tokyo",
+          });
           slotsByDate[date] = (slotsByDate[date] || 0) + 1;
         });
 
@@ -173,17 +159,17 @@ export const appRouter = router({
           startDateComponents: {
             year: startDate.getFullYear(),
             month: startDate.getMonth(),
-            day: startDate.getDate()
+            day: startDate.getDate(),
           },
           endDateComponents: {
             year: endDate.getFullYear(),
             month: endDate.getMonth(),
-            day: endDate.getDate()
+            day: endDate.getDate(),
           },
           startDateNum: result.debug.startDateNum,
           endDateNum: result.debug.endDateNum,
           processedDates: result.debug.processedDates,
-          slotsByDate
+          slotsByDate,
         };
 
         return {

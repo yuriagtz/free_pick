@@ -38,6 +38,29 @@ export async function setupVite(app: Express, server: Server) {
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`
       );
+      
+      // Replace environment variables in HTML
+      const appLogo = process.env.VITE_APP_LOGO || "https://placehold.co/128x128/E1E7EF/1F2937?text=App";
+      const appTitle = process.env.VITE_APP_TITLE || "App";
+      const analyticsEndpoint = process.env.VITE_ANALYTICS_ENDPOINT || "";
+      const analyticsWebsiteId = process.env.VITE_ANALYTICS_WEBSITE_ID || "";
+      
+      template = template.replace(/__VITE_APP_LOGO__/g, appLogo);
+      template = template.replace(/__VITE_APP_TITLE__/g, appTitle);
+      
+      // Handle analytics script - only include if both endpoint and website ID are set
+      if (analyticsEndpoint && analyticsWebsiteId) {
+        template = template.replace(
+          /<script id="analytics-script"[^>]*><\/script>/,
+          `<script defer src="${analyticsEndpoint}/umami" data-website-id="${analyticsWebsiteId}"></script>`
+        );
+      } else {
+        template = template.replace(
+          /<script id="analytics-script"[^>]*><\/script>/,
+          ""
+        );
+      }
+      
       const page = await vite.transformIndexHtml(url, template);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {

@@ -9,8 +9,13 @@ type UseAuthOptions = {
 };
 
 export function useAuth(options?: UseAuthOptions) {
-  const { redirectOnUnauthenticated = false, redirectPath = getLoginUrl() } =
+  const { redirectOnUnauthenticated = false, redirectPath: providedRedirectPath } =
     options ?? {};
+  
+  // Use useMemo to lazily evaluate getLoginUrl only when needed
+  const redirectPath = useMemo(() => {
+    return providedRedirectPath ?? getLoginUrl();
+  }, [providedRedirectPath]);
   const utils = trpc.useUtils();
 
   const meQuery = trpc.auth.me.useQuery(undefined, {
