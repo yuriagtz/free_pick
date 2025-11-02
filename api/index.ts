@@ -82,15 +82,22 @@ class GoogleTokenCookie {
       .sign(secretKey);
 
     const cookieOptions = getSessionCookieOptions(req);
-    res.cookie(GOOGLE_TOKEN_COOKIE_NAME, encryptedToken, {
+    const finalCookieOptions = {
       ...cookieOptions,
       maxAge: 365 * 24 * 60 * 60 * 1000, // 1 year
-    });
+    };
+    console.log("[Google Token] Saving cookie with options:", finalCookieOptions);
+    res.cookie(GOOGLE_TOKEN_COOKIE_NAME, encryptedToken, finalCookieOptions);
+    console.log("[Google Token] Cookie set successfully");
   }
 
   async getTokens(req: Request): Promise<GoogleTokenData | null> {
     const cookies = this.parseCookies(req.headers.cookie);
+    console.log("[Google Token] Cookie header:", req.headers.cookie ? "present" : "missing");
+    console.log("[Google Token] Cookie header length:", req.headers.cookie?.length || 0);
+    console.log("[Google Token] Parsed cookie keys:", Array.from(cookies.keys()));
     const tokenCookie = cookies.get(GOOGLE_TOKEN_COOKIE_NAME);
+    console.log("[Google Token] Token cookie found:", !!tokenCookie, "Cookie name:", GOOGLE_TOKEN_COOKIE_NAME);
 
     if (!tokenCookie) {
       return null;
