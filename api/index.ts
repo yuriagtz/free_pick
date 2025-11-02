@@ -137,10 +137,17 @@ class GoogleTokenCookie {
   async isConnected(req: Request): Promise<boolean> {
     const tokens = await this.getTokens(req);
     if (!tokens) {
+      console.log("[Google Token] isConnected: No tokens found");
       return false;
     }
     const now = Date.now();
-    return tokens.expiryDate > now - 5 * 60 * 1000;
+    const isValid = tokens.expiryDate > now - 5 * 60 * 1000;
+    console.log("[Google Token] isConnected:", isValid, {
+      expiryDate: new Date(tokens.expiryDate).toISOString(),
+      now: new Date(now).toISOString(),
+      timeUntilExpiry: tokens.expiryDate - now,
+    });
+    return isValid;
   }
 }
 

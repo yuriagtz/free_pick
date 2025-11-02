@@ -80,15 +80,30 @@ export default function AvailabilityChecker() {
       toast.success("Googleカレンダーと連携しました");
       // Clear query params first
       window.history.replaceState({}, document.title, window.location.pathname);
-      // Invalidate and refetch connection status after a short delay to ensure cookie is set
-      setTimeout(async () => {
+      
+      // Multiple retries to ensure cookie is set and status is updated
+      const retryCheck = async (attempt: number = 0) => {
+        if (attempt >= 5) {
+          console.warn("Failed to detect connection status after multiple retries");
+          return;
+        }
+        
         // Invalidate the query cache to force a fresh fetch
         await utils.calendar.getConnectionStatus.invalidate();
         // Refetch the connection status
-        await refetchStatus();
-        // Invalidate calendar list query so it will refetch when connectionStatus becomes true
-        await utils.calendar.getCalendarList.invalidate();
-      }, 500);
+        const result = await refetchStatus();
+        
+        // Check if connected, if not retry after delay
+        if (!result.data?.connected && attempt < 4) {
+          setTimeout(() => retryCheck(attempt + 1), 300);
+        } else if (result.data?.connected) {
+          // Connection confirmed, invalidate calendar list
+          await utils.calendar.getCalendarList.invalidate();
+        }
+      };
+      
+      // Start checking after initial delay
+      setTimeout(() => retryCheck(), 800);
     } else if (error) {
       toast.error(`連携に失敗しました: ${error}`);
       window.history.replaceState({}, document.title, window.location.pathname);
