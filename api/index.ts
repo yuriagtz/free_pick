@@ -212,7 +212,13 @@ app.get("/api/auth/google", async (req: Request, res: Response) => {
 
     const baseUrl = getBaseUrl(req);
     const redirectUri = `${baseUrl}/api/auth/google/callback`;
-    console.log("[Google Auth] Using redirect URI:", redirectUri);
+    console.log("[Google Auth] Base URL:", baseUrl);
+    console.log("[Google Auth] Redirect URI:", redirectUri);
+    console.log("[Google Auth] Headers:", {
+      origin: req.headers.origin,
+      host: req.headers.host,
+      "x-forwarded-proto": req.headers["x-forwarded-proto"],
+    });
     
     const oauth2Client = createOAuth2Client(redirectUri);
 
