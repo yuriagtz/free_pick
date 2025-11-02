@@ -4,6 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { APP_LOGO, APP_TITLE } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { Calendar, Check, Copy, Loader2, LogIn, X } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -196,7 +197,13 @@ export default function AvailabilityChecker() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
       <div className="container max-w-4xl">
         <div className="mb-8 text-center">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">FreePick</h1>
+          <div className="flex justify-center mb-2">
+            <img
+              src={APP_LOGO}
+              alt={APP_TITLE}
+              className="h-14 w-auto object-contain"
+            />
+          </div>
           <p className="text-gray-600">Googleカレンダーから空き時間を自動抽出するサービスです</p>
         </div>
 
