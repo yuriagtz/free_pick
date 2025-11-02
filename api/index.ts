@@ -29,58 +29,8 @@ app.use(
   })
 );
 
-// Serve static files in production
-const distPath = path.resolve(process.cwd(), "dist", "public");
-if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
-  if (fs.existsSync(distPath)) {
-    app.use(express.static(distPath));
-  }
-
-  // Fallback to index.html for SPA routing
-  app.get("*", (req: Request, res: Response) => {
-    // Don't serve index.html for API routes
-    if (req.path.startsWith("/api/")) {
-      return res.status(404).json({ error: "Not found" });
-    }
-    
-    // Try multiple paths for index.html
-    const possiblePaths = [
-      path.join(distPath, "index.html"),
-      path.resolve(process.cwd(), "dist", "public", "index.html"),
-    ];
-    
-    for (const indexPath of possiblePaths) {
-      if (fs.existsSync(indexPath)) {
-        let template = fs.readFileSync(indexPath, "utf-8");
-        
-        // Replace environment variables
-        const appLogo = process.env.VITE_APP_LOGO || "https://placehold.co/128x128/E1E7EF/1F2937?text=App";
-        const appTitle = process.env.VITE_APP_TITLE || "App";
-        template = template.replace(/__VITE_APP_LOGO__/g, appLogo);
-        template = template.replace(/__VITE_APP_TITLE__/g, appTitle);
-        
-        // Handle analytics
-        const analyticsEndpoint = process.env.VITE_ANALYTICS_ENDPOINT || "";
-        const analyticsWebsiteId = process.env.VITE_ANALYTICS_WEBSITE_ID || "";
-        if (analyticsEndpoint && analyticsWebsiteId) {
-          template = template.replace(
-            /<script id="analytics-script"[^>]*><\/script>/,
-            `<script defer src="${analyticsEndpoint}/umami" data-website-id="${analyticsWebsiteId}"></script>`
-          );
-        } else {
-          template = template.replace(
-            /<script id="analytics-script"[^>]*><\/script>/,
-            ""
-          );
-        }
-        
-        return res.status(200).set({ "Content-Type": "text/html" }).end(template);
-      }
-    }
-    
-    res.status(404).json({ error: "index.html not found" });
-  });
-}
+// Note: Static files are served by Vercel from dist/public
+// This handler only processes API routes
 
 // Vercel serverless function handler
 // Express app can be used directly as the handler
