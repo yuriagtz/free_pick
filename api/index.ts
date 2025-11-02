@@ -343,8 +343,18 @@ const appRouter = router({
     }),
 
     getConnectionStatus: publicProcedure.query(async ({ ctx }) => {
-      const connected = await googleTokenCookie.isConnected(ctx.req);
-      return { connected };
+      try {
+        console.log("[tRPC getConnectionStatus] Request headers:", {
+          cookie: ctx.req.headers.cookie?.substring(0, 100) + "...",
+          host: ctx.req.headers.host,
+        });
+        const connected = await googleTokenCookie.isConnected(ctx.req);
+        console.log("[tRPC getConnectionStatus] Result:", { connected });
+        return { connected };
+      } catch (error) {
+        console.error("[tRPC getConnectionStatus] Error:", error);
+        return { connected: false };
+      }
     }),
 
     disconnect: publicProcedure.mutation(async ({ ctx }) => {
