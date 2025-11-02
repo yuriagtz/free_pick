@@ -147,11 +147,35 @@ class GoogleTokenCookie {
 const googleTokenCookie = new GoogleTokenCookie();
 
 // ==================== Google OAuth Client ====================
-const oauth2Client = new google.auth.OAuth2(
-  ENV.googleClientId,
-  ENV.googleClientSecret,
-  `${ENV.baseUrl || "http://localhost:3000"}/api/auth/google/callback`
-);
+// Get base URL from request or environment
+function getBaseUrl(req?: Request): string {
+  if (ENV.baseUrl) {
+    return ENV.baseUrl;
+  }
+  // Try to get from request headers (for Vercel)
+  if (req) {
+    const origin = req.headers.origin;
+    if (typeof origin === "string" && origin) {
+      return origin;
+    }
+    const host = req.headers.host;
+    const proto = req.headers["x-forwarded-proto"] || "https";
+    if (typeof host === "string" && host) {
+      return `${proto}://${host}`;
+    }
+  }
+  // Fallback
+  return "http://localhost:3000";
+}
+
+// OAuth client will be initialized per request with correct redirect URI
+function createOAuth2Client(redirectUri: string) {
+  return new google.auth.OAuth2(
+    ENV.googleClientId,
+    ENV.googleClientSecret,
+    redirectUri
+  );
+}
 
 // ==================== Express App Setup ====================
 const app = express();
@@ -178,6 +202,12 @@ app.get("/api/auth/google", async (req: Request, res: Response) => {
         error: "Google OAuth is not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.",
       });
     }
+
+    const baseUrl = getBaseUrl(req);
+    const redirectUri = `${baseUrl}/api/auth/google/callback`;
+    console.log("[Google Auth] Using redirect URI:", redirectUri);
+    
+    const oauth2Client = createOAuth2Client(redirectUri);
 
     const scopes = [
       "https://www.googleapis.com/auth/userinfo.email",
@@ -211,6 +241,12 @@ app.get("/api/auth/google/callback", async (req: Request, res: Response) => {
   }
 
   try {
+    const baseUrl = getBaseUrl(req);
+    const redirectUri = `${baseUrl}/api/auth/google/callback`;
+    console.log("[Google Auth Callback] Using redirect URI:", redirectUri);
+    
+    const oauth2Client = createOAuth2Client(redirectUri);
+    
     const { tokens } = await oauth2Client.getToken(code);
     if (!tokens.access_token || !tokens.id_token) {
       res.status(400).json({ error: "Failed to get tokens" });
