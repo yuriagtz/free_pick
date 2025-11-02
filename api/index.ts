@@ -181,6 +181,7 @@ function getBaseUrl(req?: Request): string {
 }
 
 // OAuth client will be initialized per request with correct redirect URI
+// Use /api/google/callback to match the original Manus setup
 function createOAuth2Client(redirectUri: string) {
   return new google.auth.OAuth2(
     ENV.googleClientId,
@@ -206,6 +207,7 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // ==================== Google OAuth Routes ====================
+// Start OAuth flow
 app.get("/api/auth/google", async (req: Request, res: Response) => {
   try {
     if (!ENV.googleClientId || !ENV.googleClientSecret) {
@@ -216,7 +218,8 @@ app.get("/api/auth/google", async (req: Request, res: Response) => {
     }
 
     const baseUrl = getBaseUrl(req);
-    const redirectUri = `${baseUrl}/api/auth/google/callback`;
+    // Use /api/google/callback to match the original Manus setup
+    const redirectUri = `${baseUrl}/api/google/callback`;
     console.log("[Google Auth] Base URL:", baseUrl);
     console.log("[Google Auth] Redirect URI:", redirectUri);
     console.log("[Google Auth] Headers:", {
@@ -250,7 +253,8 @@ app.get("/api/auth/google", async (req: Request, res: Response) => {
   }
 });
 
-app.get("/api/auth/google/callback", async (req: Request, res: Response) => {
+// Main callback handler - use /api/google/callback to match original Manus setup
+app.get("/api/google/callback", async (req: Request, res: Response) => {
   const code = req.query.code as string;
 
   if (!code) {
@@ -260,13 +264,21 @@ app.get("/api/auth/google/callback", async (req: Request, res: Response) => {
 
   try {
     const baseUrl = getBaseUrl(req);
-    const redirectUri = `${baseUrl}/api/auth/google/callback`;
+    const redirectUri = `${baseUrl}/api/google/callback`;
     console.log("[Google Auth Callback] Using redirect URI:", redirectUri);
+    console.log("[Google Auth Callback] Authorization code received");
     
     const oauth2Client = createOAuth2Client(redirectUri);
     
     const { tokens } = await oauth2Client.getToken(code);
+    console.log("[Google Auth Callback] Tokens received:", {
+      hasAccessToken: !!tokens.access_token,
+      hasRefreshToken: !!tokens.refresh_token,
+      hasExpiryDate: !!tokens.expiry_date,
+    });
+    
     if (!tokens.access_token || !tokens.id_token) {
+      console.error("[Google Auth Callback] Missing required tokens");
       res.status(400).json({ error: "Failed to get tokens" });
       return;
     }
@@ -278,8 +290,10 @@ app.get("/api/auth/google/callback", async (req: Request, res: Response) => {
         expiryDate: tokens.expiry_date,
         scope: "calendar",
       });
+      console.log("[Google Auth Callback] Tokens saved to cookie successfully");
     }
 
+    console.log("[Google Auth Callback] Redirecting to /?google_connected=true");
     res.redirect(302, "/?google_connected=true");
   } catch (error) {
     console.error("[Google Auth] Callback failed:", error);
@@ -287,8 +301,11 @@ app.get("/api/auth/google/callback", async (req: Request, res: Response) => {
   }
 });
 
-app.get("/api/google/callback", async (req: Request, res: Response) => {
-  res.redirect("/api/auth/google/callback");
+// Keep /api/auth/google/callback as an alias for backward compatibility
+app.get("/api/auth/google/callback", async (req: Request, res: Response) => {
+  // Redirect to the main callback handler
+  const code = req.query.code;
+  res.redirect(`/api/google/callback?code=${code}`);
 });
 
 // ==================== tRPC Setup ====================
