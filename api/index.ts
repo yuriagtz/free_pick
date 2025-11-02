@@ -79,7 +79,20 @@ class GoogleTokenCookie {
 
   async saveTokens(res: Response, req: Request, tokens: GoogleTokenData): Promise<void> {
     const secretKey = this.getTokenSecret();
-    const expiresInSeconds = Math.floor((tokens.expiryDate - Date.now()) / 1000);
+    // Set expiration time as Unix timestamp (seconds since epoch)
+    // expiryDate is in milliseconds, so divide by 1000 and round down
+    const expirationTimestamp = Math.floor(tokens.expiryDate / 1000);
+    // Add 1 year to expiry for the cookie itself (refresh token is long-lived)
+    const cookieExpirationTimestamp = Math.floor((Date.now() + 365 * 24 * 60 * 60 * 1000) / 1000);
+
+    console.log("[Google Token] saveTokens - expiry details:", {
+      expiryDate: tokens.expiryDate,
+      expiryDateISO: new Date(tokens.expiryDate).toISOString(),
+      expirationTimestamp,
+      cookieExpirationTimestamp,
+      now: Date.now(),
+      nowTimestamp: Math.floor(Date.now() / 1000),
+    });
 
     const encryptedToken = await new SignJWT({
       accessToken: tokens.accessToken,
@@ -88,7 +101,7 @@ class GoogleTokenCookie {
       scope: tokens.scope || "",
     })
       .setProtectedHeader({ alg: "HS256", typ: "JWT" })
-      .setExpirationTime(expiresInSeconds)
+      .setExpirationTime(cookieExpirationTimestamp) // Use absolute timestamp, not relative
       .sign(secretKey);
 
     const cookieOptions = getSessionCookieOptions(req);
