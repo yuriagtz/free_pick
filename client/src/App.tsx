@@ -5,6 +5,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import AvailabilityChecker from "./pages/AvailabilityChecker";
+import About from "./pages/About";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 
 function Router() {
@@ -12,6 +13,7 @@ function Router() {
   return (
     <Switch>
       <Route path={"/"} component={AvailabilityChecker} />
+      <Route path={"/about"} component={About} />
       <Route path={"/privacy-policy"} component={PrivacyPolicy} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}

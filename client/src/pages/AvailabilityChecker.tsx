@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { APP_LOGO, APP_TITLE } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { Calendar, Check, Copy, Loader2, LogIn, X } from "lucide-react";
+import { Link } from "wouter";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -570,20 +571,45 @@ export default function AvailabilityChecker() {
           </div>
         )}
 
+        <Card className="mt-10 bg-white/80 shadow-md border border-blue-100">
+          <CardHeader className="space-y-3 text-left">
+            <CardTitle>FreePick について</CardTitle>
+            <CardDescription>
+              Googleカレンダーの予定を読み取り専用で参照し、空き時間を自動抽出して共有しやすいリストにまとめるWebアプリケーションです。
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6 text-sm leading-relaxed text-gray-700">
+            <p>
+              面談や打ち合わせ調整が多い個人・小規模事業者、フリーランス、営業職、採用担当者などが、候補時間を迅速に提示できるよう設計されています。
+            </p>
+            <div>
+              <h3 className="text-base font-semibold text-gray-900 mb-2">主要機能</h3>
+              <ul className="list-disc list-inside space-y-2">
+                <li>既存予定をもとにした空き時間の自動抽出</li>
+                <li>抽出した候補スロットのリスト化とコピー／共有</li>
+                <li>ログイン中のユーザー名・メールアドレス表示によるアカウント識別</li>
+              </ul>
+            </div>
+            <p>
+              取得したカレンダー情報は空き時間算出のみに使用し、予定の作成・変更・削除は一切行いません。Googleアカウントでのサインイン後も、データの安全性とプライバシーを重視した設計になっています。
+            </p>
+            <p>
+              詳細なサービス説明やスコープの目的については、下部の「サービスについて」をご参照ください。
+            </p>
+          </CardContent>
+        </Card>
+
         {/* Footer with Privacy Policy link */}
-        <footer className="mt-12 text-center text-sm text-gray-600">
-          <p>
-            <a
-              href="/privacy-policy"
-              onClick={(e) => {
-                e.preventDefault();
-                window.location.href = "/privacy-policy";
-              }}
-              className="hover:text-gray-900 underline"
-            >
+        <footer className="mt-12">
+          <div className="flex items-center justify-center gap-6 text-sm text-gray-600">
+            <Link href="/about" className="hover:text-gray-900 underline">
+              サービスについて
+            </Link>
+            <span className="text-gray-400">/</span>
+            <Link href="/privacy-policy" className="hover:text-gray-900 underline">
               プライバシーポリシー
-            </a>
-          </p>
+            </Link>
+          </div>
         </footer>
       </div>
     </div>
