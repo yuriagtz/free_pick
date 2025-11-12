@@ -574,7 +574,7 @@ export default function AvailabilityChecker() {
         {!connectionStatus?.connected && (
           <Card className="mt-10 bg-white/80 shadow-md border border-blue-100">
             <CardHeader className="space-y-3 text-left">
-              <CardTitle>FreePick について</CardTitle>
+              <CardTitle>FreePickについて</CardTitle>
               <CardDescription>
                 Googleカレンダーの予定を読み取り専用で参照し、空き時間を自動抽出して共有しやすいリストにまとめるWebアプリケーションです。
               </CardDescription>

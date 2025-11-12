@@ -145,7 +145,71 @@ export default function PrivacyPolicy() {
               </section>
 
               <section>
-                <h2 className="text-xl font-semibold text-gray-800 mb-4">第9条（プライバシーポリシーの変更）</h2>
+                <h2 className="text-xl font-semibold text-gray-800 mb-4">第9条（Google連携に関するデータの取扱い）</h2>
+                <div className="space-y-4 text-gray-700 leading-relaxed">
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold text-gray-800">取得する情報と利用目的</h3>
+                    <p>
+                      本サービスでは、Googleアカウントでログインする際にOAuth認証を利用します。この認証を通じて、以下の情報を読み取り専用で取得します。
+                    </p>
+                    <ul className="list-disc list-inside space-y-1">
+                      <li>userinfo.email / userinfo.profile：ユーザー識別およびアカウント管理のため</li>
+                      <li>calendar.readonly / calendar.events.readonly：Googleカレンダー内の予定を読み取り、空き時間を自動抽出するため</li>
+                    </ul>
+                    <p>取得したデータは、ユーザーが求めるサービス提供に限定して利用し、第三者への提供や販売は一切行いません。</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold text-gray-800">データの保存・削除方針</h3>
+                    <p>
+                      Google OAuthを通じて取得した情報は、サービス提供のために必要な最小限の範囲でのみ使用し、サーバーに永続的に保存されません。ユーザーがGoogle連携を解除した場合、認証トークンおよび一時的に保持されていた情報は即時に削除されます。
+                    </p>
+                    <p>
+                      ユーザーは
+                      <a
+                        href="https://myaccount.google.com/permissions"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        Googleアカウントの権限設定ページ
+                      </a>
+                      から、いつでもFreePickへのアクセス権を取り消すことができます。
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold text-gray-800">データ保護措置</h3>
+                    <p>当社は、取得した情報を保護するために、以下の技術的・組織的安全管理措置を講じています。</p>
+                    <ul className="list-disc list-inside space-y-1">
+                      <li>全通信経路のSSL/TLS暗号化</li>
+                      <li>データベースおよびアプリケーションサーバーへのアクセス権限管理</li>
+                      <li>外部ネットワークからの不正アクセス防止のためのファイアウォール設定</li>
+                      <li>定期的なセキュリティ監査および脆弱性対応</li>
+                      <li>個人情報保護方針に基づく社内教育とアクセスログ管理</li>
+                    </ul>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold text-gray-800">法令およびポリシー遵守</h3>
+                    <p>
+                      本サービスは、
+                      <a
+                        href="https://developers.google.com/terms/api-services-user-data-policy"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        Google API Services User Data Policy
+                      </a>
+                      を遵守し、Googleが求めるデータ保護および利用制限に従って運用されています。
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              <section>
+                <h2 className="text-xl font-semibold text-gray-800 mb-4">第10条（プライバシーポリシーの変更）</h2>
                 <p className="text-gray-700 leading-relaxed mb-4">
                   本ポリシーの内容は、法令その他本ポリシーに別段の定めのある事項を除いて、ユーザーに通知することなく、変更することができるものとします。
                 </p>
@@ -155,7 +219,7 @@ export default function PrivacyPolicy() {
               </section>
 
               <section>
-                <h2 className="text-xl font-semibold text-gray-800 mb-4">第10条（お問い合わせ窓口）</h2>
+                <h2 className="text-xl font-semibold text-gray-800 mb-4">第11条（お問い合わせ窓口）</h2>
                 <p className="text-gray-700 leading-relaxed mb-4">
                   本ポリシーに関するお問い合わせは、下記の窓口までお願いいたします。
                 </p>
